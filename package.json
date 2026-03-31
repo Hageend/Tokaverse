@@ -1,0 +1,21 @@
+{
+  "name": "tokaverse",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "pnpm install",
+    "dev:back": "pnpm --filter backend dev",
+    "dev:front": "pnpm --filter frontend dev",
+    "dev:frontLocal": "pnpm --filter frontend start",
+    "dev": "concurrently --raw -n \"BACK,FRONT\" -c \"blue,magenta\" \"pnpm dev:back\" \"pnpm dev:front\"",
+    "dev:local": "concurrently --raw -n \"BACK,FRONT\" -c \"blue,magenta\" \"pnpm dev:back\" \"pnpm dev:frontLocal\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
