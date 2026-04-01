@@ -5,9 +5,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Audio } from 'expo-av';
 
+
 const AMBIENT_MUSIC = [
   require('../../assets/music/ambient/Beneath_the_Velvet_Canopy.mp3'),
+  require('../../assets/music/ambient/Clock_With_A_Human_Face.mp3'),
+  require('../../assets/music/ambient/Innocence_Is_The_Sharpest_Blade.mp3'),
+  require('../../assets/music/ambient/The_Stranger_Inside.mp3'),
+  require('../../assets/music/ambient/Toka_Skies.mp3'),
   require('../../assets/music/ambient/Where_the_Maps_End.mp3'),
+];
+
+const COMBAT_MUSIC = [
+  require('../../assets/music/combat/Ascent_to_Victory.mp3'),
+  require('../../assets/music/combat/Beyond_The_Threshold.mp3'),
+  require('../../assets/music/combat/Kurenai_no_Kessen.mp3'),
+  require('../../assets/music/combat/Last_Hand_at_the_Gate.mp3'),
+  require('../../assets/music/combat/One_Last_Tile.mp3'),
+  require('../../assets/music/combat/The_Final_Tile.mp3'),
 ];
 
 import {
