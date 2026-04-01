@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react'
 import { Audio } from 'expo-av'
-// Música de combate y ambientación
+// Música de combate
 const COMBAT_MUSIC = [
   require('../../assets/music/combat/One_Last_Tile.mp3'),
   require('../../assets/music/combat/The_Final_Tile.mp3'),
@@ -20,15 +20,12 @@ import { Image } from 'expo-image'
 import Animated, {
   useSharedValue, useAnimatedStyle,
   withSequence, withTiming, withSpring,
+  globalVolume?: number
   FadeIn,
 } from 'react-native-reanimated'
-import { TurnManager, CombatState, CombatAction } from '../../engine/TurnManager'
+const CombatScreen = ({
 import { Fighter, Boss, StatusEffect } from '../../types/combat'
-import { Colors } from '../../constants/Colors'
-import { Ionicons } from '@expo/vector-icons'
-
-// ────────────────────────────────────────────────────────────────────────────
-// Sub-componentes UI
+  globalVolume = 0.7,
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Barra de vida/mana estilo JRPG */
@@ -332,28 +329,12 @@ export const CombatScreen = ({
           <Text style={{ color: '#fff', fontWeight: 'bold' }}>🎵 Combate</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={{ backgroundColor: musicType === 'ambient' ? Colors.primary : '#222', borderRadius: 8, padding: 8 }}
-          onPress={() => setMusicType('ambient')}
-        >
-          <Text style={{ color: '#fff', fontWeight: 'bold' }}>🌅 Ambient</Text>
-        </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12 }}>
-          <Text style={{ color: '#fff', marginRight: 6 }}>🔊</Text>
-          <TouchableOpacity onPress={() => setVolume(Math.max(0, volume - 0.1))} style={{ padding: 4 }}>
-            <Text style={{ color: '#fff', fontSize: 18 }}>➖</Text>
-          </TouchableOpacity>
-          <Text style={{ color: '#fff', minWidth: 32, textAlign: 'center' }}>{Math.round(volume * 100)}%</Text>
-          <TouchableOpacity onPress={() => setVolume(Math.min(1, volume + 0.1))} style={{ padding: 4 }}>
-            <Text style={{ color: '#fff', fontSize: 18 }}>➕</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      {/* ── Botón Salir ───────────────────────────────── */}
-      <TouchableOpacity style={styles.topExitBtn} onPress={onExit}>
-        <Ionicons name="close" size={18} color="rgba(255,255,255,0.5)" />
-        <Text style={styles.topExitText}>Huir</Text>
-      </TouchableOpacity>
-
+            <TouchableOpacity
+              style={{ backgroundColor: '#222', borderRadius: 8, padding: 8 }}
+              onPress={onExit}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Salir</Text>
+            </TouchableOpacity>
       {/* ── ZONA DEL JEFE ─────────────────────────────── */}
       <View style={styles.bossZone}>
         <View style={styles.bossHeader}>
@@ -509,7 +490,7 @@ const styles = StyleSheet.create({
   topExitBtn:   { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginBottom: 4, opacity: 0.6 },
   topExitText:  { color: '#FFF', fontSize: 12, marginLeft: 4 },
 
-  // Boss zone
+      export default CombatScreen
   bossZone:     { backgroundColor: '#12121f', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', borderRadius: 8, padding: 12, marginBottom: 10 },
   bossHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   bossName:     { color: '#FFF', fontSize: 16, fontWeight: '900', flex: 1 },
