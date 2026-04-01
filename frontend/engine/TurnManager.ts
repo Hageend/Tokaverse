@@ -195,13 +195,15 @@ export class TurnManager {
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
   private static calculateDamage(attack: number, defense: number): { damage: number; isCritical: boolean } {
-    const isCritical = Math.random() < 0.15
-    const base       = Math.max(1, Math.floor(attack) - Math.floor(defense))
-    const variance   = Math.floor(base * 0.2)
-    const damage     = base
+    const safeAttack  = isNaN(attack) ? 10 : attack
+    const safeDefense = isNaN(defense) ? 0 : defense
+    const isCritical  = Math.random() < 0.15
+    const base        = Math.max(1, Math.floor(safeAttack) - Math.floor(safeDefense))
+    const variance    = Math.floor(base * 0.2)
+    const damage      = base
       + Math.floor(Math.random() * (variance + 1))
       + (isCritical ? Math.floor(base * 0.5) : 0)
-    return { damage, isCritical }
+    return { damage: isNaN(damage) ? base : damage, isCritical }
   }
 
   private static applySkill(state: CombatState, skill: Skill): CombatState {

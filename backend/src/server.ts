@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
-import socketio from 'socket.io';
+import { Server } from 'socket.io';
+import { leagueRoutes } from './leagueRoutes';
 
 const fastify = Fastify({ logger: true });
 
@@ -7,7 +8,7 @@ fastify.get('/status', async () => {
     return { status: 'TokaVerse API Running', version: '1.0.0' };
 });
 
-fastify.get('/', async (request, reply) => {
+fastify.get('/', async () => {
     return {
         message: "Bienvenido a TOKAVERSE API",
         status: "online",
@@ -17,8 +18,25 @@ fastify.get('/', async (request, reply) => {
 
 const start = async () => {
     try {
+        // Initialize WebSockets using the raw fastify.server
+        const io = new Server(fastify.server, {
+            cors: {
+                origin: "*",
+                methods: ["GET", "POST"]
+            }
+        });
+
+        io.on('connection', (socket) => {
+            fastify.log.info(`Client connected to WebSockets: ${socket.id}`);
+        });
+
+        // Pass fastify & io to routes BEFORE listen
+        await leagueRoutes(fastify, io);
+
+        // Start listening
         await fastify.listen({ port: 3000, host: '0.0.0.0' });
-        console.log('Backend de TokaVerse listo en el puerto 3000');
+
+        console.log('Backend de TokaVerse listo en el puerto 3000 (HTTP + WebSockets)');
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);

@@ -1,6 +1,7 @@
 // engine/BossEngine.ts
 
 import { Boss, BossSkill, DebtWeakness, DebtData } from '../types/combat'
+import { BOSS_SPRITES } from '../data/classSkills'
 
 export class BossEngine {
 
@@ -43,10 +44,13 @@ export class BossEngine {
 
   private static getBossName(type: DebtData['type'], daysOverdue: number): string {
     const names: Record<DebtData['type'], string> = {
-      credit_card: daysOverdue > 30 ? '🃏 La Tarjeta Maldita'      : '🃏 La Tarjeta Oscura',
-      service:     daysOverdue > 15 ? '⚡ El Servicio Corrupto'     : '⚡ La Factura Pendiente',
-      loan:        daysOverdue > 60 ? '💀 El Préstamo Devorador'   : '💀 La Deuda Creciente',
-      overdraft:   daysOverdue > 7  ? '🌀 El Sobregiro Eterno'     : '🌀 El Saldo Negativo',
+      credit_card:   daysOverdue > 30 ? '🃏 La Tarjeta Maldita'      : '🃏 La Tarjeta Oscura',
+      service:       daysOverdue > 15 ? '⚡ El Servicio Corrupto'     : '⚡ La Factura Pendiente',
+      loan:          daysOverdue > 60 ? '💀 El Préstamo Devorador'   : '💀 La Deuda Creciente',
+      overdraft:     daysOverdue > 7  ? '🌀 El Sobregiro Eterno'     : '🌀 El Saldo Negativo',
+      toka_despensa: '🛒 El Carrito Vacío',
+      toka_fuel:     '⛽ El Tanque Vacío',
+      toka_connect:  '📑 El Gasto Sin Comprobar',
     }
     return names[type]
   }
@@ -68,6 +72,18 @@ export class BossEngine {
       overdraft: [
         { action: 'savings_deposit',  multiplier: 2.5 },
         { action: 'payment_made',     multiplier: 1.5 },
+      ],
+      toka_despensa: [
+        { action: 'payment_made',     multiplier: 2.5 }, // Compra realizada
+        { action: 'budget_respected', multiplier: 2.0 },
+      ],
+      toka_fuel: [
+        { action: 'payment_made',     multiplier: 2.0 }, // Carga realizada
+        { action: 'early_payment',    multiplier: 2.5 }, // Registro temprano
+      ],
+      toka_connect: [
+        { action: 'payment_made',     multiplier: 1.8 }, // Comprobación hecha
+        { action: 'early_payment',    multiplier: 3.0 }, // Comprobación < 48h
       ],
     }
     return map[type]
@@ -99,19 +115,28 @@ export class BossEngine {
           effect: { type: 'stun', duration: 2 },                       usableAtPhase: [2,3] },
         { id: 'void_drain',    name: '🌑 Vacío Financiero',   damage: 80, usableAtPhase: [3] },
       ],
+      toka_despensa: [
+        { id: 'empty_shelf',   name: 'Estantería Vacía',      damage: 22, usableAtPhase: [1,2,3] },
+        { id: 'price_hike',    name: 'Inflación Galopante',   damage: 38, usableAtPhase: [2,3] },
+        { id: 'hunger_pangs',  name: 'Hambruna de Vales',     damage: 65, usableAtPhase: [3] },
+      ],
+      toka_fuel: [
+        { id: 'low_fuel',      name: 'Reserva Crítica',       damage: 25, usableAtPhase: [1,2,3] },
+        { id: 'engine_stall',  name: 'Motor Detenido',        damage: 45, effect: { type: 'stun', duration: 1 }, usableAtPhase: [2,3] },
+        { id: 'gas_leak',      name: 'Fuga de Recursos',      damage: 75, usableAtPhase: [3] },
+      ],
+      toka_connect: [
+        { id: 'non_deductible', name: 'Gasto No Deducible',   damage: 28, usableAtPhase: [1,2,3] },
+        { id: 'audit_panic',    name: 'Pánico de Auditoría',  damage: 50, usableAtPhase: [2,3] },
+        { id: 'budget_freeze',  name: 'Presupuesto Congelado', damage: 85, effect: { type: 'stun', duration: 2 }, usableAtPhase: [3] },
+      ],
     }
     return skills[type]
   }
 
-  private static getBossSprite(type: DebtData['type']): string {
-    // PokeAPI Gen V animated sprites — thematically dark/menacing
-    const sprites: Record<DebtData['type'], string> = {
-      credit_card: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/94.gif',   // Gengar
-      service:     'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/477.gif',  // Dusknoir
-      loan:        'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/248.gif',  // Tyranitar
-      overdraft:   'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/426.gif',  // Drifblim
-    }
-    return sprites[type]
+  private static getBossSprite(type: DebtData['type']): string | number {
+    // Assets locales generados con IA — sin dependencia de red
+    return BOSS_SPRITES[type]
   }
 
   /** Genera un jefe de prueba sin deuda real conectada */

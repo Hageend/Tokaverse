@@ -6,7 +6,7 @@ export default function SpinsScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Spins</Text>
-      <Text style={styles.subtitle}>Spin the wheel & win prizes</Text>
+      <Text style={styles.subtitle}>Gira la ruleta y gana premios</Text>
     </ScrollView>
   );
 }

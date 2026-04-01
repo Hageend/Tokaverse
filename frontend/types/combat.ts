@@ -15,13 +15,13 @@ export interface Fighter {
   speed: number
   statusEffects: StatusEffect[]
   skills: Skill[]
-  sprite?: string
+  sprite?: string | number   // string = URL, number = require('../assets/...')
 }
 
 export interface Boss {
   id: string
   name: string
-  debtType: 'credit_card' | 'service' | 'loan' | 'overdraft'
+  debtType: 'credit_card' | 'service' | 'loan' | 'overdraft' | 'toka_despensa' | 'toka_fuel' | 'toka_connect'
   hp: number
   maxHp: number
   attack: number
@@ -30,7 +30,7 @@ export interface Boss {
   phaseThresholds: [number, number, number]
   skills: BossSkill[]
   weaknesses: DebtWeakness[]
-  sprite: string
+  sprite: string | number    // string = URL, number = require('../assets/...')
   debtAmount: number
   statusEffects: StatusEffect[]   // efectos aplicados al jefe (stun, burn, etc.)
 }
@@ -75,7 +75,7 @@ export type DebtWeakness = {
 
 export interface DebtData {
   id: string
-  type: 'credit_card' | 'service' | 'loan' | 'overdraft'
+  type: 'credit_card' | 'service' | 'loan' | 'overdraft' | 'toka_despensa' | 'toka_fuel' | 'toka_connect'
   amount: number
   daysOverdue: number
   interestRate?: number

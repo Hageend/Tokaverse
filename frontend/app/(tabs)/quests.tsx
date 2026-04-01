@@ -13,12 +13,14 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, Platform,
 } from 'react-native';
+import { io, Socket } from 'socket.io-client';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { CharacterAvatar } from '../components/CharacterAvatar';
-import CombatScreen from '../components/CombatScreen';
+import { CharacterAvatar } from '../../components/CharacterAvatar';
+import CombatScreen from '../../components/CombatScreen';
 import { BossEngine } from '../../engine/BossEngine';
 import { CLASS_FIGHTERS, CHAR_SPRITES } from '../../data/classSkills';
 import type { ClassKey } from '../../data/classSkills';
@@ -37,26 +39,40 @@ const JRPG_CLASSES = [
 type ClassId = typeof JRPG_CLASSES[number]['id'];  // 'mage' | 'warrior' | 'rogue' | 'archer' | 'banker' | 'kitsune'
 
 
-// ─── Datos de Hábitos / Dailies ────────────────────────────────────────────
+// ─── Datos de Hábitos / Dailies (Toka Integrated) ────────────────────────────
 const HABITS = [
-  { id: 'h1', title: '💸 Revisar saldo Toka', type: 'positive' as const, xp: 15 },
-  { id: 'h2', title: '🏦 Depositar al ahorro', type: 'positive' as const, xp: 25 },
-  { id: 'h3', title: '🎰 Gasto en apuestas', type: 'negative' as const, hpPenalty: 25 },
+  { id: 'h1', title: '🛒 Compra Despensa Toka', type: 'positive' as const, xp: 20 },
+  { id: 'h2', title: '⛽ Carga Eficiente Gasolina', type: 'positive' as const, xp: 25 },
+  { id: 'h3', title: '📋 Comprobación a Tiempo', type: 'positive' as const, xp: 30 },
+  { id: 'h4', title: '🎰 Gasto impulsivo extra', type: 'negative' as const, hpPenalty: 25 },
 ];
 
 const DAILIES = [
-  { id: 'd1', title: '🔔 Leer notificación Toka', completed: false, xp: 50, hpPenalty: 15 },
-  { id: 'd2', title: '📊 Respetar presupuesto hoy', completed: false, xp: 80, hpPenalty: 30 },
-  { id: 'd3', title: '🏧 No crédito extra hoy', completed: false, xp: 100, hpPenalty: 40 },
+  { id: 'd1', title: '📸 Subir comprobante Connect', completed: false, xp: 60, hpPenalty: 20 },
+  { id: 'd2', title: '📊 Registrar odómetro diario', completed: false, xp: 70, hpPenalty: 25 },
+  { id: 'd3', title: '🛒 Completar "Quest Mercadito"', completed: false, xp: 100, hpPenalty: 40 },
 ];
 
-// ─── Jefes disponibles (demo sin wallet real) ──────────────────────────────
+// ─── Jefes disponibles (Toka Products) ──────────────────────────────
 const DEMO_BOSSES = [
+  { label: '🛒 El Carrito Vacío', type: 'toka_despensa' as const, amount: 2500, daysOverdue: 0 },
+  { label: '⛽ El Tanque Vacío', type: 'toka_fuel' as const, amount: 1500, daysOverdue: 5 },
+  { label: '📑 El Gasto Sin Comprobar', type: 'toka_connect' as const, amount: 8000, daysOverdue: 15, interestRate: 10 },
   { label: '🃏 Tarjeta Maldita', type: 'credit_card' as const, amount: 5000, daysOverdue: 45, interestRate: 36 },
-  { label: '⚡ Factura Pendiente', type: 'service' as const, amount: 1500, daysOverdue: 10 },
-  { label: '💀 Préstamo Devorador', type: 'loan' as const, amount: 15000, daysOverdue: 70, interestRate: 24 },
-  { label: '🌀 Sobregiro Eterno', type: 'overdraft' as const, amount: 800, daysOverdue: 5 },
 ];
+
+const USER_ID = 'user_123';
+const getApiUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+  let host = Constants.expoConfig?.hostUri?.split(':')[0];
+  if (!host || host === 'localhost' || host === '127.0.0.1') {
+    if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
+    return 'http://localhost:3000';
+  }
+  return `http://${host}:3000`;
+};
+const API_URL = getApiUrl();
+const XP_THRESHOLDS = [0, 2500, 10000, 35000, 100000];
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function QuestsScreen() {
@@ -95,13 +111,47 @@ export default function QuestsScreen() {
   useEffect(() => {
     if (ambientSound) ambientSound.setVolumeAsync(volume);
   }, [volume, ambientSound]);
+  // Sincronización con Backend
+  const [userProfile, setUserProfile] = useState<{ id: string, xp: number, level: number } | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    const fetchProfile = async () => {
+       try {
+         const res = await fetch(`${API_URL}/users/${USER_ID}/profile`);
+         if (res.ok) {
+           const data = await res.json();
+           if (isMounted) setUserProfile(data);
+         }
+       } catch (e) { console.error("Profile Fetch Error:", e); }
+    };
+    fetchProfile();
+
+    const socket = io(API_URL);
+    socketRef.current = socket;
+    socket.on('userUpdated', (updated: any) => {
+       if (updated.id === USER_ID && isMounted) setUserProfile(updated);
+    });
+
+    return () => {
+      isMounted = false;
+      socket.disconnect();
+    };
+  }, []);
+
   const [classIndex, setClassIndex] = useState(0);
-  const [level, setLevel] = useState(12);
-  const [xp, setXp] = useState(6450);
-  const [xpMax] = useState(10000);
-  const [hp, setHp] = useState(85);
+  const level = userProfile?.level || 1;
+  const xp = userProfile?.xp || 0;
+  
+  // Umbrales dinámicos
+  const xpMax = XP_THRESHOLDS[level] || 100000;
+  const prevThreshold = XP_THRESHOLDS[level - 1] || 0;
+
+  const [hp, setHp] = useState(100);
   const [hpMax] = useState(100);
-  const [mana] = useState(25);
+  const [mana] = useState(50);
   const [manaMax] = useState(50);
   const [multiplier] = useState(1.5);
   const [defenseStreak] = useState(4);
@@ -121,27 +171,35 @@ export default function QuestsScreen() {
   const currentClass = JRPG_CLASSES[classIndex];
 
   // ── RPG helpers ──────────────────────────────────────────────────────────
-  const gainXp = (amount: number) => {
+  const gainXp = async (amount: number, source: string = 'Quest Action') => {
     setAttacking(true);
-    const gained = Math.floor(amount * multiplier);
-    const newXp = xp + gained;
-    if (newXp >= xpMax) {
-      Alert.alert('レベルアップ！', `¡Nivel ${level + 1} alcanzado!`);
-      setLevel(l => l + 1);
-      setXp(0);
-    } else {
-      setXp(newXp);
+    const totalXp = Math.floor(amount * multiplier);
+    try {
+      await fetch(`${API_URL}/users/${USER_ID}/transaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountXp: totalXp, source })
+      });
+    } catch (e) {
+      console.warn("XP Gain API Error:", e);
     }
     setTimeout(() => setAttacking(false), 500);
   };
 
-  const takeDamage = (amount: number) => {
+  const takeDamage = async (amount: number) => {
     setDamage(true);
     const newHp = hp - amount;
     if (newHp <= 0) {
-      Alert.alert('ゲームオーバー (¡Caíste!)', 'Perdiste un nivel por descuido financiero.');
+      Alert.alert('ゲームオーバー (¡Caíste!)', 'Has perdido vitalidad y algo de experiencia por descuido financiero.');
       setHp(hpMax);
-      setLevel(l => Math.max(1, l - 1));
+      // Penalización fuerte de XP si HP llega a 0
+      try {
+        await fetch(`${API_URL}/users/${USER_ID}/transaction`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amountXp: -500, source: 'Derrota / Descuido' })
+        });
+      } catch (e) { console.warn("XP Damage Error:", e); }
     } else {
       setHp(newHp);
     }
@@ -167,20 +225,27 @@ export default function QuestsScreen() {
     takeDamage(30);
   };
 
+  // ─── Gestión de Audio (Pausa/Resumen) ─────────────────────────────────────
+  useEffect(() => {
+    async function syncAudio() {
+      try {
+        if (inCombat) {
+          if (ambientSound) await ambientSound.pauseAsync();
+        } else {
+          if (ambientSound) await ambientSound.playAsync();
+        }
+      } catch (e) {
+        console.warn("[Quests] Audio Sync Error:", e);
+      }
+    }
+    syncAudio();
+  }, [inCombat, ambientSound]);
+
   // ─── COMBAT MODE — cubre toda la pantalla ──────────────────────────────
   if (inCombat && activeBoss && activeFighter) {
-    // Pausar música de ambientación al entrar en combate
-    useEffect(() => {
-      isCombatRef.current = true;
-      if (ambientSound) ambientSound.pauseAsync();
-      return () => {
-        isCombatRef.current = false;
-        if (ambientSound) ambientSound.playAsync();
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
     return (
       <CombatScreen
+        key={`combat_${activeBoss.id}_${Date.now()}`}
         player={activeFighter}
         boss={activeBoss}
         onVictory={handleVictory}
@@ -195,17 +260,22 @@ export default function QuestsScreen() {
   return (
     <View style={styles.container}>
       {/* ── Control de música y volumen global ─────────────── */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 12 }}>
-        <Text style={{ color: '#fff', fontWeight: 'bold' }}>🌅 Música: Ambient</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12 }}>
-          <Text style={{ color: '#fff', marginRight: 6 }}>🔊</Text>
-          <TouchableOpacity onPress={() => setVolume(Math.max(0, volume - 0.1))} style={{ padding: 4 }}>
-            <Text style={{ color: '#fff', fontSize: 18 }}>➖</Text>
+      <View style={styles.audioHeader}>
+        <View style={styles.audioInfo}>
+          <Text style={styles.audioGenre}>🌅 Ambient</Text>
+          <Text style={styles.audioStatus}>Playing</Text>
+        </View>
+        <View style={styles.volumeControl}>
+          <TouchableOpacity onPress={() => setVolume(Math.max(0, volume - 0.1))} style={styles.volBtn}>
+            <Ionicons name="volume-low" size={16} color="#FFF" />
           </TouchableOpacity>
-          <Text style={{ color: '#fff', minWidth: 32, textAlign: 'center' }}>{Math.round(volume * 100)}%</Text>
-          <TouchableOpacity onPress={() => setVolume(Math.min(1, volume + 0.1))} style={{ padding: 4 }}>
-            <Text style={{ color: '#fff', fontSize: 18 }}>➕</Text>
+          <View style={styles.volBarBg}>
+            <View style={[styles.volBarFill, { width: `${volume * 100}%` }]} />
+          </View>
+          <TouchableOpacity onPress={() => setVolume(Math.min(1, volume + 0.1))} style={styles.volBtn}>
+            <Ionicons name="volume-high" size={16} color="#FFF" />
           </TouchableOpacity>
+          <Text style={styles.volText}>{Math.round(volume * 100)}%</Text>
         </View>
       </View>
 
@@ -311,7 +381,7 @@ export default function QuestsScreen() {
             <View style={{ gap: 6 }}>
               <TouchableOpacity style={styles.statusBtn} onPress={() => setShowStatus(true)}>
                 <Ionicons name="person-circle" size={14} color="#FFF" />
-                <Text style={styles.statusBtnTxt}> ステータス</Text>
+                <Text style={styles.statusBtnTxt}> Estado</Text>
               </TouchableOpacity>
               <View style={styles.defenseBadge}>
                 <Ionicons name="shield-checkmark" size={12} color={Colors.tertiary} />
@@ -339,7 +409,7 @@ export default function QuestsScreen() {
                     <Text style={styles.barVal}>{b.cur}/{b.max}</Text>
                   </View>
                   <View style={styles.barBg}>
-                    <View style={[styles.barFill, { width: `${Math.min(100, (b.cur / b.max) * 100)}%` as any, backgroundColor: b.color }]} />
+                    <View style={[styles.barFill, { width: `${Math.min(100, ((b.label === 'XP' ? (xp - prevThreshold) : b.cur) / (b.label === 'XP' ? (xpMax - prevThreshold) : b.max)) * 100)}%` as any, backgroundColor: b.color }]} />
                   </View>
                 </View>
               ))}
@@ -351,8 +421,8 @@ export default function QuestsScreen() {
         <TouchableOpacity style={styles.combatButton} onPress={() => setShowBossSelect(true)}>
           <Text style={styles.combatButtonIcon}>⚔️</Text>
           <View>
-            <Text style={styles.combatButtonTxt}>Entrar en Combate</Text>
-            <Text style={styles.combatButtonSub}>Derrota tus deudas · Sistema por Turnos</Text>
+            <Text style={styles.combatButtonTxt}>¡A combatir!</Text>
+            <Text style={styles.combatButtonSub}>Enfrenta tus deudas · Combate por turnos</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#FFF" style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
@@ -391,6 +461,7 @@ export default function QuestsScreen() {
                 onPress={() => h.type === 'positive' ? gainXp(h.xp) : takeDamage(h.hpPenalty!)}
               >
                 <Ionicons name={h.type === 'positive' ? 'add' : 'remove'} size={22} color={h.type === 'positive' ? '#10B981' : '#EF4444'} />
+                <Text style={styles.cardBtnTxt}>{h.type === 'positive' ? '¡Hecho!' : 'Castigar'}</Text>
               </TouchableOpacity>
             </Animated.View>
           ))}
@@ -409,6 +480,7 @@ export default function QuestsScreen() {
                     gainXp(d.xp);
                   }}>
                     <Ionicons name="checkmark" size={18} color="#000" />
+                    <Text style={styles.cardBtnTxt}>¡Listo!</Text>
                   </TouchableOpacity>
                 )
                 : <Ionicons name="checkmark-circle" size={26} color="#10B981" style={{ marginRight: 14 }} />
@@ -443,7 +515,7 @@ export default function QuestsScreen() {
                     </View>
                     {isLow && (
                       <TouchableOpacity style={styles.healBtn}>
-                        <Text style={styles.healBtnTxt}>HEAL</Text>
+                        <Text style={styles.healBtnTxt}>CURAR</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -502,6 +574,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: '#FFF', fontWeight: '700', fontSize: 14, marginBottom: 3 },
   cardSub: { color: Colors.textMuted, fontSize: 11, fontWeight: '700' },
   cardBtn: { width: 42, height: 42, borderRadius: 6, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  cardBtnTxt: { color: '#FFF', fontSize: 10, fontWeight: '700', marginTop: 2 },
   checkBtnYellow: { width: 30, height: 30, backgroundColor: '#F59E0B', borderRadius: 4, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
 
   // Party
@@ -545,4 +618,15 @@ const styles = StyleSheet.create({
   bossPickName: { color: '#FFF', fontWeight: '900', fontSize: 16 },
   bossPickSub: { color: Colors.textSecondary, fontSize: 12, marginTop: 4 },
   bossPickHp: { color: '#EF4444', fontSize: 11, fontWeight: '700', marginTop: 6 },
+
+  // Audio Styles
+  audioHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 14, marginBottom: 12, backgroundColor: '#1E1E24', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  audioInfo: { flex: 1 },
+  audioGenre: { color: Colors.tertiary, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  audioStatus: { color: 'rgba(255,255,255,0.4)', fontSize: 9, marginTop: 1 },
+  volumeControl: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  volBtn: { padding: 4 },
+  volBarBg: { width: 60, height: 4, backgroundColor: '#000', borderRadius: 2, overflow: 'hidden' },
+  volBarFill: { height: '100%', backgroundColor: Colors.tertiary },
+  volText: { color: '#FFF', fontSize: 10, fontWeight: 'bold', minWidth: 28, textAlign: 'right' },
 });

@@ -1,7 +1,29 @@
 // data/classSkills.ts
+// Clases de personaje JRPG + skills + fighters configurados con sprites locales
 
 import { Skill } from '../types/combat'
 
+// ── Refs a assets locales (mucho más rápido que URLs externas) ──────────────
+export const CHAR_SPRITES = {
+  mage:    require('../assets/images/char_mage.png'),
+  warrior: require('../assets/images/char_warrior.png'),
+  rogue:   require('../assets/images/char_rogue.png'),
+  archer:  require('../assets/images/char_archer.png'),
+  banker:  require('../assets/images/char_banker.png'),
+  kitsune: require('../assets/images/char_kitsune.png'),
+} as const
+
+export const BOSS_SPRITES = {
+  credit_card:   require('../assets/images/boss_credit_card.png'),
+  service:       require('../assets/images/boss_bill.png'),
+  loan:          require('../assets/images/boss_loan.png'),
+  overdraft:     require('../assets/images/boss_overdraft.png'),
+  toka_despensa: require('../assets/images/boss_bill.png'),        // Reusando sprite similar
+  toka_fuel:     require('../assets/images/boss_overdraft.png'),   // Reusando sprite similar
+  toka_connect:  require('../assets/images/boss_credit_card.png'), // Reusando sprite similar
+} as const
+
+// ── Skills por clase ────────────────────────────────────────────────────────
 export const CLASS_SKILLS: Record<string, Skill[]> = {
 
   mage: [
@@ -85,9 +107,55 @@ export const CLASS_SKILLS: Record<string, Skill[]> = {
       targetType: 'enemy',
     },
   ],
+
+  // ── NUEVAS CLASES ──────────────────────────────────────────────────────────
+
+  banker: [
+    {
+      id: 'compound_interest', name: '📈 Interés Compuesto',
+      manaCost: 25, damage: 65,
+      targetType: 'enemy',
+      financialTrigger: 'savings_deposit',   // +50% si ahorró hoy
+    },
+    {
+      id: 'hedge_fund', name: '💼 Fondo de Cobertura',
+      manaCost: 20,
+      effect: { type: 'shield', duration: 2, reduction: 0.45 },
+      targetType: 'self',
+    },
+    {
+      id: 'market_crash', name: '📉 Crash del Mercado',
+      manaCost: 45, damage: 110,
+      targetType: 'enemy',
+      financialTrigger: 'goal_completed',
+    },
+  ],
+
+  kitsune: [
+    {
+      id: 'spirit_coin', name: '🪙 Moneda del Espíritu',
+      manaCost: 15, damage: 55,
+      targetType: 'enemy',
+      financialTrigger: 'payment_made',
+    },
+    {
+      id: 'fox_barrier', name: '🦊 Barrera del Zorro',
+      manaCost: 20,
+      effect: { type: 'shield', duration: 2, reduction: 0.35 },
+      heal: 20,
+      targetType: 'self',
+    },
+    {
+      id: 'yen_curse', name: '💮 Maldición del Yen',
+      manaCost: 30,
+      effect: { type: 'poison', duration: 3, damagePerTurn: 12 },
+      targetType: 'enemy',
+      financialTrigger: 'budget_respected',
+    },
+  ],
 }
 
-// Fighters pre-configurados por clase para acceso rápido
+// ── Fighters pre-configurados por clase ────────────────────────────────────
 export const CLASS_FIGHTERS = {
   mage: {
     id: 'player_mage',
@@ -98,7 +166,7 @@ export const CLASS_FIGHTERS = {
     attack: 55, defense: 10, speed: 8,
     statusEffects: [],
     skills: CLASS_SKILLS.mage,
-    sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/654.gif',
+    sprite: CHAR_SPRITES.mage,
   },
   warrior: {
     id: 'player_warrior',
@@ -109,7 +177,7 @@ export const CLASS_FIGHTERS = {
     attack: 40, defense: 30, speed: 5,
     statusEffects: [],
     skills: CLASS_SKILLS.warrior,
-    sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/503.gif',
+    sprite: CHAR_SPRITES.warrior,
   },
   rogue: {
     id: 'player_rogue',
@@ -120,7 +188,7 @@ export const CLASS_FIGHTERS = {
     attack: 65, defense: 15, speed: 15,
     statusEffects: [],
     skills: CLASS_SKILLS.rogue,
-    sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/658.gif',
+    sprite: CHAR_SPRITES.rogue,
   },
   archer: {
     id: 'player_archer',
@@ -131,6 +199,30 @@ export const CLASS_FIGHTERS = {
     attack: 50, defense: 20, speed: 12,
     statusEffects: [],
     skills: CLASS_SKILLS.archer,
-    sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/724.gif',
+    sprite: CHAR_SPRITES.archer,
+  },
+  banker: {
+    id: 'player_banker',
+    name: 'Shōnin',        // 商人 — comerciante
+    class: 'mage' as const, // clase base más cercana
+    hp: 130, maxHp: 130,
+    mana: 90, maxMana: 90,
+    attack: 48, defense: 18, speed: 10,
+    statusEffects: [],
+    skills: CLASS_SKILLS.banker,
+    sprite: CHAR_SPRITES.banker,
+  },
+  kitsune: {
+    id: 'player_kitsune',
+    name: 'Kitsune',       // 狐 — zorro espiritual
+    class: 'rogue' as const,
+    hp: 150, maxHp: 150,
+    mana: 75, maxMana: 75,
+    attack: 52, defense: 22, speed: 13,
+    statusEffects: [],
+    skills: CLASS_SKILLS.kitsune,
+    sprite: CHAR_SPRITES.kitsune,
   },
 }
+
+export type ClassKey = keyof typeof CLASS_FIGHTERS

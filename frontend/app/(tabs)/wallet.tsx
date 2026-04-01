@@ -6,7 +6,7 @@ export default function WalletScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Wallet</Text>
-      <Text style={styles.subtitle}>Manage your tokens & balance</Text>
+      <Text style={styles.subtitle}>Administra tus tokens y saldo</Text>
     </ScrollView>
   );
 }
