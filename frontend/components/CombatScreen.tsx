@@ -23,8 +23,12 @@ import { Colors } from '../constants/Colors'
 import type { PlayerCard, FusionResult } from '../types/fusion'
 
 const COMBAT_TRACKS = [
-  require('../assets/music/combat/One_Last_Tile.mp3'),
-  require('../assets/music/combat/The_Final_Tile.mp3'),
+  require('../../assets/music/combat/Ascent_to_Victory.mp3'),
+  require('../../assets/music/combat/Beyond_The_Threshold.mp3'),
+  require('../../assets/music/combat/Kurenai_no_Kessen.mp3'),
+  require('../../assets/music/combat/Last_Hand_at_the_Gate.mp3'),
+  require('../../assets/music/combat/One_Last_Tile.mp3'),
+  require('../../assets/music/combat/The_Final_Tile.mp3'),
 ]
 
 const PHASE_THEME_COLORS: Record<number, string> = {
