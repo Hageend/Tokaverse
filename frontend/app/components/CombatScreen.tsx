@@ -17,15 +17,24 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform
 } from 'react-native'
 import { Image } from 'expo-image'
+
 import Animated, {
   useSharedValue, useAnimatedStyle,
   withSequence, withTiming, withSpring,
-  globalVolume?: number
   FadeIn,
 } from 'react-native-reanimated'
-const CombatScreen = ({
 import { Fighter, Boss, StatusEffect } from '../../types/combat'
-  globalVolume = 0.7,
+
+interface CombatScreenProps {
+  player: Fighter
+  boss: Boss
+  onVictory?: (boss: Boss) => void
+  onDefeat?:  () => void
+  onExit:     () => void
+  globalVolume?: number
+}
+
+const CombatScreen = ({ player, boss, onVictory, onDefeat, onExit, globalVolume = 0.7 }: CombatScreenProps) => {
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Barra de vida/mana estilo JRPG */
@@ -190,7 +199,7 @@ interface CombatScreenProps {
   onExit:     () => void
 }
 
-export const CombatScreen = ({
+// ...existing code...
   player, boss, onVictory, onDefeat, onExit,
 }: CombatScreenProps) => {
   // Estado de música y volumen
