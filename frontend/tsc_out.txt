@@ -1,0 +1,1 @@
+﻿engine/TurnManager.ts(389,32): error TS2322: Type 'string' is not assignable to type 'undefined'.

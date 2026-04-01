@@ -2,8 +2,9 @@
 // Clases de personaje JRPG + skills + fighters configurados con sprites locales
 
 import { Skill } from '../types/combat'
+import { StatusEffectRich } from '../engine/StatusEngine'
 
-// ── Refs a assets locales (mucho más rápido que URLs externas) ──────────────
+// ── Refs a assets locales ────────────────────────────────────────────────────
 export const CHAR_SPRITES = {
   mage:    require('../assets/images/char_mage.png'),
   warrior: require('../assets/images/char_warrior.png'),
@@ -18,26 +19,37 @@ export const BOSS_SPRITES = {
   service:       require('../assets/images/boss_bill.png'),
   loan:          require('../assets/images/boss_loan.png'),
   overdraft:     require('../assets/images/boss_overdraft.png'),
-  toka_despensa: require('../assets/images/boss_bill.png'),        // Reusando sprite similar
-  toka_fuel:     require('../assets/images/boss_overdraft.png'),   // Reusando sprite similar
-  toka_connect:  require('../assets/images/boss_credit_card.png'), // Reusando sprite similar
+  toka_despensa: require('../assets/images/boss_bill.png'),
+  toka_fuel:     require('../assets/images/boss_overdraft.png'),
+  toka_connect:  require('../assets/images/boss_credit_card.png'),
 } as const
 
-// ── Skills por clase ────────────────────────────────────────────────────────
+// ── Helpers de efectos ───────────────────────────────────────────────────────
+const stunEffect:    StatusEffectRich = { type: 'stunned',     duration: 1 }
+const shieldEffect:  StatusEffectRich = { type: 'shielded',    duration: 2 }
+const shieldHeavy:   StatusEffectRich = { type: 'shielded',    duration: 3 }
+const boostEffect:   StatusEffectRich = { type: 'blessed',     duration: 2 }
+const boostLong:     StatusEffectRich = { type: 'strengthened',duration: 2, multiplier: 1.3 }
+const poisonEffect:  StatusEffectRich = { type: 'poison',      duration: 3, value: 12 }
+const regenEffect:   StatusEffectRich = { type: 'regenerating',duration: 2, value: 20 }
+const frozenEffect:  StatusEffectRich = { type: 'frozen',      duration: 1 }
+const focusEffect:   StatusEffectRich = { type: 'focused',     duration: 1 }
+
+// ── Skills por clase ─────────────────────────────────────────────────────────
 export const CLASS_SKILLS: Record<string, Skill[]> = {
 
   mage: [
     {
       id: 'frost_save', name: '❄️ Congelación de Gasto',
       manaCost: 20,
-      effect:   { type: 'stun', duration: 1 },
+      effect:   frozenEffect,
       targetType: 'enemy',
       financialTrigger: 'savings_deposit',
     },
     {
       id: 'mana_shield', name: '🔵 Escudo de Maná',
       manaCost: 15,
-      effect:   { type: 'shield', duration: 2, reduction: 0.4 },
+      effect:   shieldEffect,
       targetType: 'self',
     },
     {
@@ -63,7 +75,7 @@ export const CLASS_SKILLS: Record<string, Skill[]> = {
     {
       id: 'scout', name: '🔍 Reconocimiento',
       manaCost: 10,
-      effect: { type: 'boost', duration: 2, multiplier: 1.3 },
+      effect: focusEffect,
       targetType: 'self',
     },
   ],
@@ -78,7 +90,7 @@ export const CLASS_SKILLS: Record<string, Skill[]> = {
     {
       id: 'iron_shield', name: '🛡️ Escudo de Hierro',
       manaCost: 15,
-      effect: { type: 'shield', duration: 3, reduction: 0.6 },
+      effect: shieldHeavy,
       targetType: 'self',
     },
     {
@@ -98,7 +110,7 @@ export const CLASS_SKILLS: Record<string, Skill[]> = {
     {
       id: 'smoke_screen', name: '💨 Cortina de Humo',
       manaCost: 15,
-      effect: { type: 'shield', duration: 1, reduction: 0.7 },
+      effect: shieldEffect,
       targetType: 'self',
     },
     {
@@ -108,19 +120,19 @@ export const CLASS_SKILLS: Record<string, Skill[]> = {
     },
   ],
 
-  // ── NUEVAS CLASES ──────────────────────────────────────────────────────────
+  // ── NUEVAS CLASES ────────────────────────────────────────────────────────
 
   banker: [
     {
       id: 'compound_interest', name: '📈 Interés Compuesto',
       manaCost: 25, damage: 65,
       targetType: 'enemy',
-      financialTrigger: 'savings_deposit',   // +50% si ahorró hoy
+      financialTrigger: 'savings_deposit',
     },
     {
       id: 'hedge_fund', name: '💼 Fondo de Cobertura',
       manaCost: 20,
-      effect: { type: 'shield', duration: 2, reduction: 0.45 },
+      effect: shieldEffect,
       targetType: 'self',
     },
     {
@@ -141,21 +153,21 @@ export const CLASS_SKILLS: Record<string, Skill[]> = {
     {
       id: 'fox_barrier', name: '🦊 Barrera del Zorro',
       manaCost: 20,
-      effect: { type: 'shield', duration: 2, reduction: 0.35 },
+      effect: regenEffect,
       heal: 20,
       targetType: 'self',
     },
     {
       id: 'yen_curse', name: '💮 Maldición del Yen',
       manaCost: 30,
-      effect: { type: 'poison', duration: 3, damagePerTurn: 12 },
+      effect: poisonEffect,
       targetType: 'enemy',
       financialTrigger: 'budget_respected',
     },
   ],
 }
 
-// ── Fighters pre-configurados por clase ────────────────────────────────────
+// ── Fighters pre-configurados por clase ──────────────────────────────────────
 export const CLASS_FIGHTERS = {
   mage: {
     id: 'player_mage',
@@ -163,6 +175,7 @@ export const CLASS_FIGHTERS = {
     class: 'mage' as const,
     hp: 120, maxHp: 120,
     mana: 80, maxMana: 80,
+    stamina: 100, maxStamina: 100,
     attack: 55, defense: 10, speed: 8,
     statusEffects: [],
     skills: CLASS_SKILLS.mage,
@@ -174,6 +187,7 @@ export const CLASS_FIGHTERS = {
     class: 'warrior' as const,
     hp: 200, maxHp: 200,
     mana: 50, maxMana: 50,
+    stamina: 100, maxStamina: 100,
     attack: 40, defense: 30, speed: 5,
     statusEffects: [],
     skills: CLASS_SKILLS.warrior,
@@ -185,6 +199,7 @@ export const CLASS_FIGHTERS = {
     class: 'rogue' as const,
     hp: 140, maxHp: 140,
     mana: 60, maxMana: 60,
+    stamina: 100, maxStamina: 100,
     attack: 65, defense: 15, speed: 15,
     statusEffects: [],
     skills: CLASS_SKILLS.rogue,
@@ -196,6 +211,7 @@ export const CLASS_FIGHTERS = {
     class: 'archer' as const,
     hp: 160, maxHp: 160,
     mana: 65, maxMana: 65,
+    stamina: 100, maxStamina: 100,
     attack: 50, defense: 20, speed: 12,
     statusEffects: [],
     skills: CLASS_SKILLS.archer,
@@ -203,10 +219,11 @@ export const CLASS_FIGHTERS = {
   },
   banker: {
     id: 'player_banker',
-    name: 'Shōnin',        // 商人 — comerciante
-    class: 'mage' as const, // clase base más cercana
+    name: 'Shōnin',
+    class: 'mage' as const,
     hp: 130, maxHp: 130,
     mana: 90, maxMana: 90,
+    stamina: 100, maxStamina: 100,
     attack: 48, defense: 18, speed: 10,
     statusEffects: [],
     skills: CLASS_SKILLS.banker,
@@ -214,10 +231,11 @@ export const CLASS_FIGHTERS = {
   },
   kitsune: {
     id: 'player_kitsune',
-    name: 'Kitsune',       // 狐 — zorro espiritual
+    name: 'Kitsune',
     class: 'rogue' as const,
     hp: 150, maxHp: 150,
     mana: 75, maxMana: 75,
+    stamina: 100, maxStamina: 100,
     attack: 52, defense: 22, speed: 13,
     statusEffects: [],
     skills: CLASS_SKILLS.kitsune,

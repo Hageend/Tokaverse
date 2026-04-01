@@ -1,107 +1,294 @@
 // engine/TurnManager.ts
+// Orquestador central del combate JRPG — integra todos los motores
 
-import { Fighter, Boss, Skill, StatusEffect } from '../types/combat'
+import { Fighter, Boss, Skill } from '../types/combat'
+import { Element, ElementEngine, CLASS_ELEMENTS, BOSS_ELEMENTS, ELEMENT_INFO } from '../types/elements'
+import { StatusEngine, StatusEffectRich } from './StatusEngine'
+import { FusionEngine, DEMO_CARDS } from './FusionEngine'
+import { BossPhaseEngine, Minion } from './BossPhaseEngine'
+import { getPhasesForBoss } from '../data/bossPhases'
+import type { FusionResult, PlayerCard } from '../types/fusion'
 
 export type CombatAction =
   | { type: 'ATTACK' }
   | { type: 'SKILL';             skillId: string }
   | { type: 'DEFEND' }
   | { type: 'FINANCIAL_ACTION'; action: string; multiplier: number }
+  | { type: 'FUSION';            fusionId: string }
+  | { type: 'ATTACK_MINION';    minionId: string }
 
 export interface CombatLog {
-  turn:        number
-  actor:       'player' | 'boss'
-  action:      string
-  damage?:     number
-  heal?:       number
-  effect?:     StatusEffect
-  isCritical?: boolean
-  isWeakness?: boolean
-  message:     string
+  turn:             number
+  actor:            'player' | 'boss' | 'system'
+  action:           string
+  damage?:          number
+  heal?:            number
+  effect?:          StatusEffectRich
+  isCritical?:      boolean
+  isWeakness?:      boolean
+  elementMult?:     number
+  effectLabel?:     string    // "¡SÚPER EFECTIVO!" etc.
+  effectColor?:     string    // color para mostrar en UI
+  message:          string
 }
 
 export interface CombatState {
-  player:       Fighter
-  boss:         Boss
-  turn:         number
-  phase:        'player_turn' | 'boss_turn' | 'victory' | 'defeat'
-  log:          CombatLog[]
-  comboCounter: number
+  player:           Fighter
+  boss:             Boss
+  turn:             number
+  phase:            'player_turn' | 'boss_turn' | 'victory' | 'defeat'
+  log:              CombatLog[]
+  comboCounter:     number
+  // Estado extendido
+  activeFusion?:    FusionResult          // fusión activa en este combate
+  equippedCards:    PlayerCard[]          // cartas equipadas pre-combate
+  availableFusions: FusionResult[]        // fusiones posibles con las cartas equipadas
+  activeFusionEffect?: {                  // efecto de fusión vigente
+    fusion:       FusionResult
+    turnsLeft:    number
+    statBoost:    number                  // multiplicador activo (ej: 1.25)
+    autoBlock:    boolean
+    freeSkill:    boolean                 // próximo skill sin costo de mana
+  }
+  minions:          Minion[]             // minions en campo
+  weekpointsActive: boolean
+  bossPhaseJustChanged: boolean          // flag para mostrar banner de fase
+  bossPhaseData?:   ReturnType<typeof getPhasesForBoss>[number]
+  bankruptcyWarning: boolean             // flag para mostrar advertencia visual
+  telegraphMsg?:    string              // mensaje de telegrafía del jefe
+  divineState:      boolean             // blessed + focused activos
+  consecutiveBossHits: number           // para mecánica "Cargo por mora"
+  turnsPlayerNotUsedCards: number       // para mecánica "Oferta irresistible"
+  lastPlayerAction?: CombatAction['type']
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 export class TurnManager {
 
-  static initCombat(player: Fighter, boss: Boss): CombatState {
+  static initCombat(
+    player: Fighter,
+    boss:   Boss,
+    equippedCards?: PlayerCard[],
+  ): CombatState {
+    const cards         = equippedCards ?? DEMO_CARDS.slice(0, 3)
+    const fusions        = FusionEngine.detectFusions(cards.map(c => c.cardId))
+    const playerElement  = CLASS_ELEMENTS[player.class]?.primary ?? 'thunder'
+    const bossPhases     = getPhasesForBoss(boss.debtType)
+
+    // Asignar elemento al jugador si no lo tiene
+    const enrichedPlayer: Fighter = {
+      ...player,
+      element:    playerElement,
+      stamina:    player.stamina    ?? 100,
+      maxStamina: player.maxStamina ?? 100,
+    }
+
+    // Asignar elemento al jefe si no lo tiene
+    const bossElem = BOSS_ELEMENTS[boss.debtType] ?? { primary: 'dark' as Element }
+    const enrichedBoss: Boss = {
+      ...boss,
+      element:          boss.element          ?? bossElem.primary,
+      secondaryElement: boss.secondaryElement ?? bossElem.secondary,
+      bankruptcyUsed:   false,
+      consecutiveHits:  0,
+      turnsWithoutCards: 0,
+    }
+
     return {
-      player,
-      boss,
-      turn:         1,
-      phase:        player.speed >= 10 ? 'player_turn' : 'boss_turn',
-      log:          [{
-        turn: 0, actor: 'boss', action: 'spawn',
+      player:          enrichedPlayer,
+      boss:            enrichedBoss,
+      turn:            1,
+      phase:           enrichedPlayer.speed >= 10 ? 'player_turn' : 'boss_turn',
+      log: [{
+        turn: 0, actor: 'system', action: 'SPAWN',
         message: `⚠️ ¡${boss.name} ha aparecido! Monto: $${boss.debtAmount.toLocaleString('es-MX')} MXN`,
+      }, {
+        turn: 0, actor: 'system', action: 'ELEMENT_INFO',
+        message: `${ELEMENT_INFO[playerElement]?.emoji} Tu elemento: ${ELEMENT_INFO[playerElement]?.label} · Disponibles: ${fusions.length} fusión(es)`,
       }],
-      comboCounter: 0,
+      comboCounter:              0,
+      equippedCards:             cards,
+      availableFusions:          fusions,
+      activeFusion:              undefined,
+      activeFusionEffect:        undefined,
+      minions:                   [],
+      weekpointsActive:          false,
+      bossPhaseJustChanged:      false,
+      bossPhaseData:             bossPhases.find(p => p.phaseNumber === 1),
+      bankruptcyWarning:         false,
+      telegraphMsg:              undefined,
+      divineState:               false,
+      consecutiveBossHits:       0,
+      turnsPlayerNotUsedCards:   0,
+      lastPlayerAction:          undefined,
     }
   }
 
-  // ─── TURNO DEL JUGADOR ───────────────────────────────────────────────────
+  // ─── TURNO DEL JUGADOR ────────────────────────────────────────────────────
   static executePlayerAction(state: CombatState, action: CombatAction): CombatState {
-    let newState = { ...state, log: [...state.log] }
+    let s = { ...state, log: [...state.log], bossPhaseJustChanged: false, bankruptcyWarning: false }
 
+    // 1. Verificar si la acción puede ejecutarse (estados alterados)
+    const { succeeds, redirectToSelf, reason } = StatusEngine.actionSucceeds(s.player.statusEffects)
+    if (!succeeds) {
+      s.log.push({ turn: s.turn, actor: 'player', action: 'BLOCKED', message: reason ?? '❌ Acción bloqueada.' })
+      s.phase = 'boss_turn'
+      return s
+    }
+
+    // 2. Obtener elemento del jugador y multiplicador elemental vs jefe
+    const playerElement = s.player.element ?? CLASS_ELEMENTS[s.player.class]?.primary ?? 'thunder'
+    const bossElement   = s.boss.element ?? 'dark'
+    const elemMult      = ElementEngine.getMultiplier(playerElement, bossElement)
+    const elemLabel     = ElementEngine.getEffectivenessLabel(elemMult)
+    const elemColor     = ElementEngine.getEffectivenessColor(elemMult)
+
+    // 3. Multiplicadores de fusión activa
+    const fusionBoost = s.activeFusionEffect?.statBoost ?? 1.0
+    const autoBlock   = s.activeFusionEffect?.autoBlock ?? false
+    const freeSkill   = s.activeFusionEffect?.freeSkill ?? false
+
+    // 4. Multiplicadores de estados positivos
+    const damageStatMult = StatusEngine.getDamageMultiplier(s.player.statusEffects, s.divineState)
+
+    // 5. Ejecutar acción
     switch (action.type) {
 
       case 'ATTACK': {
-        const { damage, isCritical } = this.calculateDamage(state.player.attack, state.boss.defense)
-        newState.boss         = { ...state.boss, hp: Math.max(0, state.boss.hp - damage) }
-        newState.comboCounter += 1
-        newState.log.push({
-          turn: state.turn, actor: 'player', action: 'ATTACK',
-          damage, isCritical,
+        // Ataque básico — sin redirigir a sí mismo si está confundido
+        if (redirectToSelf) {
+          const selfDmg = Math.floor(s.player.attack * 0.5)
+          s.player      = { ...s.player, hp: Math.max(0, s.player.hp - selfDmg) }
+          s.log.push({ turn: s.turn, actor: 'player', action: 'CONFUSED_HIT', damage: selfDmg, message: `${reason} — ¡${selfDmg} de daño a ti mismo!` })
+          break
+        }
+        const { damage, isCritical } = this.calculateDamage(
+          s.player.attack, s.boss.defense,
+          elemMult, fusionBoost, damageStatMult,
+          s.player.statusEffects.some(e => e.type === 'focused'),
+        )
+        s.boss         = { ...s.boss, hp: Math.max(0, s.boss.hp - damage) }
+        s.comboCounter += 1
+        s.consecutiveBossHits = 0   // reset contador de hits consecutivos del jefe
+        s.log.push({
+          turn: s.turn, actor: 'player', action: 'ATTACK',
+          damage, isCritical, elementMult: elemMult, effectLabel: elemLabel, effectColor: elemColor,
           message: isCritical
-            ? `⚡ ¡Golpe crítico! ${state.player.name} inflige ${damage} de daño`
-            : `⚔️ ${state.player.name} ataca por ${damage} de daño`,
+            ? `⚡ ¡CRÍTICO! ${s.player.name} ataca por ${damage} DMG${elemLabel ? ` · ${elemLabel}` : ''}`
+            : `⚔️ ${s.player.name} ataca por ${damage} DMG${elemLabel ? ` · ${elemLabel}` : ''}`,
         })
+        // Consumir estado focused si estaba activo
+        s.player = { ...s.player, statusEffects: s.player.statusEffects.filter(e => e.type !== 'focused') }
         break
       }
 
       case 'SKILL': {
-        const skill = state.player.skills.find(s => s.id === action.skillId)
-        if (!skill || state.player.mana < skill.manaCost) {
-          newState.log.push({ turn: state.turn, actor: 'player', action: 'SKILL_FAIL',
-            message: '❌ Mana insuficiente para usar esa habilidad.' })
+        const skill = s.player.skills.find(sk => sk.id === action.skillId)
+        if (!skill) { s.log.push({ turn: s.turn, actor: 'player', action: 'SKILL_FAIL', message: '❌ Habilidad no encontrada.' }); break }
+
+        // Verificar si el jugador está encadenado (no puede usar especiales)
+        if (s.player.statusEffects.some(e => e.type === 'chained')) {
+          s.log.push({ turn: s.turn, actor: 'player', action: 'CHAINED', message: '⛓️ Estás encadenado — no puedes usar habilidades especiales.' })
           break
         }
-        newState = this.applySkill(newState, skill)
-        newState.player = { ...newState.player, mana: newState.player.mana - skill.manaCost }
+
+        // Verificar costo de mana (maldición duplica el costo)
+        const isCursed    = s.player.statusEffects.some(e => e.type === 'cursed')
+        const manaCost    = freeSkill ? 0 : (isCursed ? skill.manaCost * 2 : skill.manaCost)
+        if (s.player.mana < manaCost) {
+          s.log.push({ turn: s.turn, actor: 'player', action: 'SKILL_FAIL', message: '❌ Mana insuficiente' + (isCursed ? ' (Maldición: x2 costo)' : '') + '.' })
+          break
+        }
+
+        s.player = { ...s.player, mana: s.player.mana - manaCost }
+        s = this.applySkill(s, skill, elemMult, fusionBoost, damageStatMult)
+        s.turnsPlayerNotUsedCards = 0   // usó una habilidad → reseteamos la trampa "Oferta irresistible"
+
+        // Consumir freeSkill si estaba activo
+        if (freeSkill && s.activeFusionEffect) {
+          s.activeFusionEffect = { ...s.activeFusionEffect, freeSkill: false }
+        }
         break
       }
 
       case 'DEFEND': {
-        const shield: StatusEffect = { type: 'shield', duration: 1, reduction: 0.5 }
-        newState.player = {
-          ...state.player,
-          statusEffects: [...state.player.statusEffects, shield],
-        }
-        newState.log.push({
-          turn: state.turn, actor: 'player', action: 'DEFEND',
-          message: `🛡️ ${state.player.name} se prepara — DMG reducido 50% este turno`,
+        const shieldEffect: StatusEffectRich = { type: 'shielded', duration: 1 }
+        const { effects: newEffects } = StatusEngine.applyStatus(s.player.statusEffects, shieldEffect)
+        s.player = { ...s.player, statusEffects: newEffects }
+        s.log.push({
+          turn: s.turn, actor: 'player', action: 'DEFEND',
+          message: '🛡️ ' + s.player.name + ' se pone en guardia — próximo ataque absorbido',
         })
         break
       }
 
       case 'FINANCIAL_ACTION': {
-        const weakness    = state.boss.weaknesses.find(w => w.action === action.action)
-        const multiplier  = weakness ? weakness.multiplier : action.multiplier
-        const { damage }  = this.calculateDamage(state.player.attack * multiplier, state.boss.defense)
-        newState.boss     = { ...state.boss, hp: Math.max(0, state.boss.hp - damage) }
-        newState.comboCounter += 2
-        newState.log.push({
-          turn: state.turn, actor: 'player', action: 'FINANCIAL_ACTION',
+        const weakness    = s.boss.weaknesses.find(w => w.action === action.action)
+        const mult        = weakness ? weakness.multiplier : action.multiplier
+        const { damage }  = this.calculateDamage(
+          s.player.attack * mult, s.boss.defense,
+          elemMult, fusionBoost, damageStatMult, false,
+        )
+        s.boss           = { ...s.boss, hp: Math.max(0, s.boss.hp - damage) }
+        s.comboCounter   += 2
+
+        // Mecánica Fase 4: TX real de Toka → bonus adicional si boss.phase === 4
+        let bonusMsg = ''
+        if (s.boss.phase === 4) {
+          const txBonus = Math.floor(s.boss.hp * 0.20)
+          s.boss        = { ...s.boss, hp: Math.max(0, s.boss.hp - txBonus) }
+          bonusMsg      = ` + 💳 Acción Financiera Real: ${txBonus} HP extra`
+        }
+
+        s.log.push({
+          turn: s.turn, actor: 'player', action: 'FINANCIAL_ACTION',
           damage, isWeakness: !!weakness,
           message: weakness
-            ? `💥 ¡DÉBILIDAD! Tu pago real inflige ${damage} DMG (x${multiplier.toFixed(1)})`
-            : `💳 Tu acción financiera inflige ${damage} de daño`,
+            ? `💥 ¡DEBILIDAD FINANCIERA! ${damage} DMG (x${mult.toFixed(1)})${bonusMsg}`
+            : `💳 Acción financiera: ${damage} de daño${bonusMsg}`,
+        })
+        s.turnsPlayerNotUsedCards = 0
+        break
+      }
+
+      case 'FUSION': {
+        const fusion = s.availableFusions.find(f => f.id === action.fusionId)
+        if (!fusion) { s.log.push({ turn: s.turn, actor: 'player', action: 'FUSION_FAIL', message: '❌ Fusión no disponible.' }); break }
+
+        s.activeFusionEffect = {
+          fusion,
+          turnsLeft: fusion.duration,
+          statBoost: fusion.statBoost ?? 1.0,
+          autoBlock: fusion.specialEffect === 'auto_block',
+          freeSkill: fusion.specialEffect === 'no_mana_cost',
+        }
+        s.activeFusion    = fusion
+        s.availableFusions = s.availableFusions.filter(f => f.id !== fusion.id)
+
+        // Aplicar estado positivo si la fusión lo da
+        if (fusion.statBoost && fusion.statBoost > 1.0) {
+          const boostEff: StatusEffectRich = { type: 'strengthened', duration: fusion.duration, multiplier: fusion.statBoost }
+          const { effects } = StatusEngine.applyStatus(s.player.statusEffects, boostEff)
+          s.player = { ...s.player, statusEffects: effects }
+        }
+
+        s.log.push({
+          turn: s.turn, actor: 'player', action: 'FUSION',
+          message: `✨ ¡Fusión activada: ${fusion.name}! — ${fusion.description}`,
+        })
+        s.turnsPlayerNotUsedCards = 0
+        break
+      }
+
+      case 'ATTACK_MINION': {
+        const { damage } = this.calculateDamage(s.player.attack, 0, 1.0, fusionBoost, damageStatMult, false)
+        const { minions, killed, minionKilled } = BossPhaseEngine.attackMinion(s.minions, action.minionId, damage)
+        s.minions = minions
+        s.log.push({
+          turn: s.turn, actor: 'player', action: 'ATTACK_MINION', damage,
+          message: killed
+            ? `👻 ¡El Cobrador fue eliminado! (${damage} DMG)`
+            : `🗡️ Golpeas al Cobrador — ${damage} DMG`,
         })
         break
       }
@@ -109,164 +296,244 @@ export class TurnManager {
       default: break
     }
 
-    if (newState.boss.hp <= 0) {
-      newState.phase = 'victory'
-      newState.log.push({ turn: newState.turn, actor: 'player', action: 'VICTORY',
-        message: `🏆 ¡${newState.boss.name} ha sido derrotado!` })
-      return newState
+    s.lastPlayerAction = action.type
+
+    // ── Verificar victoria ────────────────────────────────────────────────────
+    if (s.boss.hp <= 0) {
+      s.phase = 'victory'
+      s.log.push({ turn: s.turn, actor: 'system', action: 'VICTORY', message: `🏆 ¡${s.boss.name} ha sido derrotado! Tu crédito mejora.` })
+      return s
     }
 
-    newState.boss  = this.checkBossPhase(newState.boss, state.boss.phase)
-    newState.phase = 'boss_turn'
-    return newState
+    // ── Verificar transición de fase del jefe ─────────────────────────────────
+    const hpPct = (s.boss.hp / s.boss.maxHp) * 100
+    const { newPhase, didTransition } = BossPhaseEngine.checkPhaseTransition(hpPct, s.boss.phase, s.boss.debtType)
+    if (didTransition && newPhase) {
+      s.boss = { ...s.boss, phase: newPhase.phaseNumber as 1|2|3|4 }
+      s.bossPhaseJustChanged = true
+      s.bossPhaseData = newPhase
+      s.weekpointsActive = newPhase.weakpoints
+      s.log.push({
+        turn: s.turn, actor: 'boss', action: 'PHASE_CHANGE',
+        message: `💀 ¡${s.boss.name} entra en "${newPhase.name}"! ${newPhase.description}`,
+      })
+
+      // Mecánica de "Oferta irresistible" en fase 1 → recuperar HP si no usó cartas
+      if (s.boss.phase === 1 && s.turnsPlayerNotUsedCards >= 2) {
+        const healAmt = 50
+        s.boss = { ...s.boss, hp: Math.min(s.boss.maxHp, s.boss.hp + healAmt) }
+        s.log.push({ turn: s.turn, actor: 'boss', action: 'TEMPTATION_HEAL', heal: healAmt, message: `💛 ¡Oferta Irresistible! El jefe recupera ${healAmt} HP` })
+      }
+    }
+
+    // ── Turno se pasa al jefe ─────────────────────────────────────────────────
+    s.phase = 'boss_turn'
+    return s
   }
 
   // ─── TURNO DEL JEFE (automático) ─────────────────────────────────────────
   static executeBossTurn(state: CombatState): CombatState {
-    let newState = { ...state, log: [...state.log] }
+    let s = { ...state, log: [...state.log], bossPhaseJustChanged: false, telegraphMsg: undefined as string | undefined, bankruptcyWarning: false }
 
-    // Aplica efectos de estado pasivos al jugador (veneno/quemadura)
-    let playerHp = state.player.hp
-    const activePoisons = state.player.statusEffects.filter(
-      e => e.type === 'poison' || e.type === 'burn'
-    ) as Array<{ type: 'poison' | 'burn'; duration: number; damagePerTurn: number }>
-    for (const eff of activePoisons) {
-      playerHp -= eff.damagePerTurn
+    // 1. Procesar estados del jugador (veneno, quemadura, regeneración, etc.)
+    const result = StatusEngine.processTurnEffects(
+      s.player.hp, s.player.mana, s.player.maxHp, s.player.maxMana, s.player.defense, s.player.statusEffects,
+    )
+    s.player            = { ...s.player, hp: result.hp, mana: result.mana, defense: result.defense, statusEffects: result.effects }
+    s.divineState       = result.divineState
+    for (const logMsg of result.log) {
+      s.log.push({ turn: s.turn, actor: 'system', action: 'STATUS_TICK', message: logMsg })
     }
 
-    // ¿Stun activo en el JEFE? El jefe pierde su turno
-    const isStunned = state.boss.statusEffects?.some((e: StatusEffect) => e.type === 'stun') ?? false
-    if (isStunned) {
-      newState.log.push({ turn: state.turn, actor: 'boss', action: 'STUN',
-        message: `😵 ${state.boss.name} está aturdido y pierde su turno.` })
-    } else {
-      const availableSkills = state.boss.skills.filter(s => s.usableAtPhase.includes(state.boss.phase))
-      const chosen          = availableSkills[Math.floor(Math.random() * availableSkills.length)]
-
-      // Verificar escudo del jugador
-      const shield = state.player.statusEffects.find(e => e.type === 'shield') as
-        (Extract<StatusEffect, { type: 'shield' }> | undefined)
-      let dmg = chosen.damage
-      if (shield) dmg = Math.floor(dmg * (1 - shield.reduction))
-
-      playerHp -= dmg
-      newState.log.push({
-        turn: state.turn, actor: 'boss', action: chosen.id, damage: dmg,
-        effect: chosen.effect,
-        message: shield
-          ? `🛡️ ${state.boss.name} usa ${chosen.name} — bloqueado parcialmente: ${dmg} DMG`
-          : `💢 ${state.boss.name} usa ${chosen.name}: ${dmg} DMG`,
-      })
-
-      if (chosen.effect) {
-        newState.player = { ...state.player, statusEffects: [...state.player.statusEffects, chosen.effect] }
+    // 2. Actualizar minions si los hay
+    if (s.minions.length > 0) {
+      const { minions, reached } = BossPhaseEngine.updateMinions(s.minions, 1000)
+      s.minions = minions
+      for (const m of reached) {
+        const mDmg = m.damage
+        s.player  = { ...s.player, hp: Math.max(0, s.player.hp - mDmg) }
+        s.log.push({ turn: s.turn, actor: 'boss', action: 'MINION_HIT', damage: mDmg, message: `👻 ¡El Cobrador te alcanza! -${mDmg} HP` })
       }
     }
 
-    // Tick de efectos de estado del jugador (decrementa duration, filtra expirados)
-    const updatedPlayerEffects = (newState.player.statusEffects ?? state.player.statusEffects)
-      .map(e => ({ ...e, duration: e.duration - 1 }))
-      .filter(e => e.duration > 0) as StatusEffect[]
-
-    // Tick de efectos de estado del jefe
-    const updatedBossEffects = (newState.boss.statusEffects ?? [])
-      .map(e => ({ ...e, duration: e.duration - 1 }))
-      .filter(e => e.duration > 0) as StatusEffect[]
-
-    newState.boss   = { ...newState.boss,   statusEffects: updatedBossEffects }
-    newState.player = {
-      ...state.player,
-      ...newState.player,
-      hp: Math.max(0, playerHp),
-      statusEffects: updatedPlayerEffects,
+    // 3. Spawn de minions si aplica (cada 3 turnos en fase 3+)
+    const phaseData = s.bossPhaseData
+    if (phaseData?.spawnsMinions && s.turn % 3 === 0) {
+      const newMinion = BossPhaseEngine.spawnMinion()
+      s.minions = [...s.minions, newMinion]
+      s.log.push({ turn: s.turn, actor: 'boss', action: 'MINION_SPAWN', message: `👻 ¡${phaseData.uniqueMechanic.warningMessage}` })
     }
 
-    if (newState.player.hp <= 0) {
-      newState.phase = 'defeat'
-      newState.log.push({ turn: newState.turn, actor: 'boss', action: 'DEFEAT',
-        message: `💀 ${state.player.name} ha caído. La deuda prevalece...` })
-      return newState
+    // 4. ¿El jefe está stun? Pierde turno
+    const isStunned = s.boss.statusEffects?.some(e => e.type === 'stunned') ?? false
+    if (isStunned) {
+      s.log.push({ turn: s.turn, actor: 'boss', action: 'STUN', message: `😵 ${s.boss.name} está aturdido — pierde este turno.` })
+    } else {
+      // 5. Seleccionar skill del jefe según fase actual
+      const availableSkills = s.boss.skills.filter(sk => sk.usableAtPhase.includes(s.boss.phase))
+
+      // Mecánica "Cargo por mora" fase 2+: si el jefe recibió 3 ataques consecutivos → daño x2
+      const consecutiveDmgBonus = (s.boss.phase >= 2 && s.consecutiveBossHits >= 3) ? 2.0 : 1.0
+      if (consecutiveDmgBonus > 1.0) {
+        s.log.push({ turn: s.turn, actor: 'boss', action: 'COMPOUND_INTEREST', message: '📈 ¡Cargo por Mora! El siguiente ataque del jefe hace x2 daño' })
+        s.consecutiveBossHits = 0
+      }
+
+      // Priorizar Bancarrota si está disponible y no se ha usado
+      let chosen = availableSkills[Math.floor(Math.random() * availableSkills.length)]
+      if (s.boss.phase === 4 && !s.boss.bankruptcyUsed && availableSkills.find(sk => sk.id === 'bankruptcy')) {
+        chosen = availableSkills.find(sk => sk.id === 'bankruptcy')!
+      }
+
+      // 6. Telegrafiar ataque si tiene mensaje
+      if (chosen.telegraphMsg) s.telegraphMsg = chosen.telegraphMsg
+
+      // 7. Calcular daño con bonus de fase y estado
+      const phaseBonus = phaseData ? BossPhaseEngine.getPhaseAttackBonus(phaseData) : 1.0
+
+      let dmg = Math.floor(chosen.damage * phaseBonus * consecutiveDmgBonus * StatusEngine.getBossEnrageMultiplier(s.boss.statusEffects))
+
+      // Mecánica Bancarrota: daño fijo del 40% HP máximo del jugador
+      let isBankruptcy = false
+      if (chosen.id === 'bankruptcy' && !s.boss.bankruptcyUsed) {
+        dmg          = BossPhaseEngine.calculateBankruptcyDamage(s.player.maxHp)
+        isBankruptcy = true
+        s.boss       = { ...s.boss, bankruptcyUsed: true }
+        s.bankruptcyWarning = true
+      }
+
+      // 8. Verificar si el escudo del jugador absorbe el golpe
+      const { absorbed, newEffects: afterShield } = StatusEngine.consumeShield(s.player.statusEffects)
+      if (absorbed || (isBankruptcy && s.activeFusionEffect?.autoBlock)) {
+        s.player           = { ...s.player, statusEffects: afterShield }
+        s.log.push({
+          turn: s.turn, actor: 'boss', action: chosen.id,
+          message: `🛡️ ¡${isBankruptcy ? 'Escudo Familiar absorbe BANCARROTA' : 'El Escudo absorbe'}! ${chosen.name} bloqueado completamente`,
+        })
+      } else {
+        // 9. Aplicar daño al jugador
+        s.player           = { ...s.player, hp: Math.max(0, s.player.hp - dmg), statusEffects: afterShield }
+        s.consecutiveBossHits += 1
+
+        s.log.push({
+          turn: s.turn, actor: 'boss', action: chosen.id, damage: dmg,
+          effect: chosen.effect,
+          message: isBankruptcy
+            ? `💀 ¡¡BANCARROTA!! ${chosen.name}: ${dmg} DMG (40% de tu HP máximo)`
+            : `💢 ${s.boss.name} usa ${chosen.name}: ${dmg} DMG`,
+        })
+
+        // 10. Aplicar efecto del skill del jefe al jugador
+        if (chosen.effect) {
+          const { effects, interactionLog } = StatusEngine.applyStatus(s.player.statusEffects, chosen.effect)
+          s.player = { ...s.player, statusEffects: effects }
+          if (interactionLog) s.log.push({ turn: s.turn, actor: 'system', action: 'INTERACTION', message: interactionLog })
+        }
+      }
+
+      // Incrementar contador "sin cartas" para mecánica Oferta Irresistible
+      if (s.lastPlayerAction === 'ATTACK' || s.lastPlayerAction === 'DEFEND') {
+        s.turnsPlayerNotUsedCards += 1
+      } else {
+        s.turnsPlayerNotUsedCards = 0
+      }
     }
 
-    newState.turn  = state.turn + 1
-    newState.phase = 'player_turn'
-    return newState
+    // 11. Tick de estados del jefe (decrementa duración)
+    const updatedBossEffects = (s.boss.statusEffects ?? [])
+      .map(e => ({ ...e, duration: e.duration - 1 }))
+      .filter(e => e.duration > 0) as StatusEffectRich[]
+    s.boss = { ...s.boss, statusEffects: updatedBossEffects }
+
+    // 12. Tick de efecto de fusión activa
+    if (s.activeFusionEffect) {
+      const turnsLeft = s.activeFusionEffect.turnsLeft - 1
+      if (turnsLeft <= 0) {
+        s.activeFusionEffect = undefined
+        s.log.push({ turn: s.turn, actor: 'system', action: 'FUSION_EXPIRED', message: '🌟 La fusión ha expirado.' })
+      } else {
+        s.activeFusionEffect = { ...s.activeFusionEffect, turnsLeft }
+      }
+    }
+
+    // 13. Verificar derrota
+    if (s.player.hp <= 0) {
+      s.phase = 'defeat'
+      s.log.push({ turn: s.turn, actor: 'boss', action: 'DEFEAT', message: `💀 ${s.player.name} ha caído. La deuda prevalece...` })
+      return s
+    }
+
+    s.turn  = s.turn + 1
+    s.phase = 'player_turn'
+    return s
   }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
-  private static calculateDamage(attack: number, defense: number): { damage: number; isCritical: boolean } {
-    const safeAttack  = isNaN(attack) ? 10 : attack
-    const safeDefense = isNaN(defense) ? 0 : defense
-    const isCritical  = Math.random() < 0.15
-    const base        = Math.max(1, Math.floor(safeAttack) - Math.floor(safeDefense))
-    const variance    = Math.floor(base * 0.2)
-    const damage      = base
+  private static calculateDamage(
+    attack:      number,
+    defense:     number,
+    elemMult:    number   = 1.0,
+    fusionMult:  number   = 1.0,
+    statusMult:  number   = 1.0,
+    isFocused:   boolean  = false,
+  ): { damage: number; isCritical: boolean } {
+    const safeAtk  = isNaN(attack)  ? 10 : attack
+    const safeDef  = isNaN(defense) ? 0  : defense
+    const isCrit   = isFocused || Math.random() < 0.15
+    const base     = Math.max(1, Math.floor(safeAtk) - Math.floor(safeDef))
+    const variance = Math.floor(base * 0.2)
+    const raw      = base
       + Math.floor(Math.random() * (variance + 1))
-      + (isCritical ? Math.floor(base * 0.5) : 0)
-    return { damage: isNaN(damage) ? base : damage, isCritical }
+      + (isCrit && !isFocused ? Math.floor(base * 0.5) : 0)
+      + (isFocused ? Math.floor(base * 0.8) : 0)  // Enfocado = 80% extra
+
+    const final = Math.floor(raw * elemMult * fusionMult * statusMult)
+    return { damage: isNaN(final) ? base : Math.max(1, final), isCritical: isCrit }
   }
 
-  private static applySkill(state: CombatState, skill: Skill): CombatState {
-    let newState = { ...state, log: [...state.log] }
+  private static applySkill(
+    state:       CombatState,
+    skill:       Skill,
+    elemMult:    number,
+    fusionMult:  number,
+    statusMult:  number,
+  ): CombatState {
+    let s    = { ...state, log: [...state.log] }
+    const isFocused = s.player.statusEffects.some(e => e.type === 'focused')
 
     if (skill.damage) {
-      const { damage, isCritical } = this.calculateDamage(skill.damage, state.boss.defense)
-      newState.boss = { ...state.boss, hp: Math.max(0, state.boss.hp - damage) }
-      newState.log.push({
-        turn: state.turn, actor: 'player', action: skill.id, damage, isCritical,
+      const { damage, isCritical } = this.calculateDamage(skill.damage, s.boss.defense, elemMult, fusionMult, statusMult, isFocused)
+      s.boss = { ...s.boss, hp: Math.max(0, s.boss.hp - damage) }
+      const elemLabel = ElementEngine.getEffectivenessLabel(elemMult)
+      s.log.push({
+        turn: s.turn, actor: 'player', action: skill.id, damage, isCritical,
+        elementMult: elemMult, effectLabel: elemLabel,
         message: isCritical
-          ? `⚡ ¡CRÍTICO! ${state.player.name} usa ${skill.name} por ${damage} DMG`
-          : `✨ ${state.player.name} usa ${skill.name} por ${damage} DMG`,
+          ? `⚡ ¡CRÍTICO! ${s.player.name} usa ${skill.name}: ${damage} DMG${elemLabel ? ' · ' + elemLabel : ''}`
+          : `✨ ${s.player.name} usa ${skill.name}: ${damage} DMG${elemLabel ? ' · ' + elemLabel : ''}`,
       })
     }
 
     if (skill.heal) {
-      const healed    = Math.min(skill.heal, state.player.maxHp - state.player.hp)
-      newState.player = { ...state.player, hp: state.player.hp + healed }
-      newState.log.push({
-        turn: state.turn, actor: 'player', action: skill.id, heal: healed,
-        message: `💚 ${state.player.name} se cura ${healed} HP con ${skill.name}`,
-      })
+      const healed = Math.min(skill.heal, s.player.maxHp - s.player.hp)
+      s.player     = { ...s.player, hp: s.player.hp + healed }
+      s.log.push({ turn: s.turn, actor: 'player', action: skill.id, heal: healed, message: `💚 ${s.player.name} se cura ${healed} HP con ${skill.name}` })
     }
 
     if (skill.effect) {
       if (skill.targetType === 'enemy' || skill.targetType === 'all_enemies') {
-        // Aplicar efecto al jefe (stun, burn, etc.)
-        newState.boss = {
-          ...newState.boss,
-          statusEffects: [...(newState.boss.statusEffects ?? []), skill.effect],
-        }
-        newState.log.push({
-          turn: state.turn, actor: 'player', action: skill.id, effect: skill.effect,
-          message: `✨ ${skill.name} aplica ${skill.effect.type} al jefe por ${skill.effect.duration} turnos`,
-        })
+        const { effects, interactionLog } = StatusEngine.applyStatus(s.boss.statusEffects, skill.effect)
+        s.boss = { ...s.boss, statusEffects: effects }
+        s.log.push({ turn: s.turn, actor: 'player', action: skill.id, effect: skill.effect, message: `✨ ${skill.name} aplica ${skill.effect.type} al jefe (${skill.effect.duration} turnos)` })
+        if (interactionLog) s.log.push({ turn: s.turn, actor: 'system', action: 'INTERACTION', message: interactionLog })
       } else {
-        newState.player = {
-          ...newState.player,
-          statusEffects: [...(newState.player.statusEffects ?? []), skill.effect],
-        }
-        newState.log.push({
-          turn: state.turn, actor: 'player', action: skill.id, effect: skill.effect,
-          message: `✨ ${skill.name} aplica efecto: ${skill.effect.type} (${skill.effect.duration} turnos)`,
-        })
+        const { effects, interactionLog } = StatusEngine.applyStatus(s.player.statusEffects, skill.effect)
+        s.player = { ...s.player, statusEffects: effects }
+        s.log.push({ turn: s.turn, actor: 'player', action: skill.id, effect: skill.effect, message: `✨ ${skill.name}: ${skill.effect.type} activo (${skill.effect.duration} turnos)` })
+        if (interactionLog) s.log.push({ turn: s.turn, actor: 'system', action: 'INTERACTION', message: interactionLog })
       }
     }
 
-    return newState
-  }
-
-  private static checkBossPhase(boss: Boss, previousPhase: number): Boss {
-    const hpPercent = (boss.hp / boss.maxHp) * 100
-    let newPhase    = boss.phase
-
-    if      (hpPercent <= 25) newPhase = 3
-    else if (hpPercent <= 50) newPhase = 2
-    else if (hpPercent <= 75) newPhase = 1
-
-    if (newPhase !== previousPhase) {
-      console.log(`⚠️ ¡${boss.name} entra en FASE ${newPhase}! Se vuelve más peligroso.`)
-    }
-
-    return { ...boss, phase: newPhase as 1 | 2 | 3 }
+    return s
   }
 }
