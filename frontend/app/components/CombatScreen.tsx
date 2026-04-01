@@ -3,9 +3,20 @@
 // Integra TurnManager + BossEngine + animaciones Reanimated 3
 
 import React, { useState, useCallback, useEffect } from 'react'
+import { Audio } from 'expo-av'
+// Música de combate y ambientación
+const COMBAT_MUSIC = [
+  require('../../assets/music/combat/One_Last_Tile.mp3'),
+  require('../../assets/music/combat/The_Final_Tile.mp3'),
+]
+const AMBIENT_MUSIC = [
+  require('../../assets/music/ambient/Beneath_the_Velvet_Canopy.mp3'),
+  require('../../assets/music/ambient/Where_the_Maps_End.mp3'),
+]
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Platform
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform
 } from 'react-native'
+import { Image } from 'expo-image'
 import Animated, {
   useSharedValue, useAnimatedStyle,
   withSequence, withTiming, withSpring,
@@ -60,7 +71,7 @@ const barStyles = StyleSheet.create({
 /** Sprite animado — se sacude al recibir daño */
 const AnimatedSprite = ({
   spriteUrl, onHit, size = 100,
-}: { spriteUrl: string; onHit: boolean; size?: number }) => {
+}: { spriteUrl: string | number; onHit: boolean; size?: number }) => {
   const tx = useSharedValue(0)
   const scale = useSharedValue(1)
 
@@ -84,16 +95,22 @@ const AnimatedSprite = ({
     transform: [{ translateX: tx.value }, { scale: scale.value }],
   }))
 
+  // expo-image source: number (require) || { uri: string }
+  const source = typeof spriteUrl === 'number'
+    ? spriteUrl
+    : { uri: spriteUrl }
+
   return (
     <Animated.View style={animated}>
       <Image
-        source={{ uri: spriteUrl }}
+        source={source}
         style={[
           { width: size, height: size },
           // @ts-ignore — imageRendering only valid on web
           Platform.OS === 'web' && { imageRendering: 'pixelated' },
         ]}
-        resizeMode="contain"
+        contentFit="contain"
+        cachePolicy="memory-disk"
       />
     </Animated.View>
   )
@@ -179,6 +196,42 @@ interface CombatScreenProps {
 export const CombatScreen = ({
   player, boss, onVictory, onDefeat, onExit,
 }: CombatScreenProps) => {
+  // Estado de música y volumen
+  const [musicType, setMusicType] = useState<'combat' | 'ambient'>('combat')
+  const [sound, setSound] = useState<Audio.Sound | null>(null)
+  const [volume, setVolume] = useState(0.7)
+
+  // Reproducir música según tipo
+  useEffect(() => {
+    let isMounted = true
+    async function playMusic() {
+      if (sound) {
+        await sound.stopAsync()
+        await sound.unloadAsync()
+      }
+      const tracks = musicType === 'combat' ? COMBAT_MUSIC : AMBIENT_MUSIC
+      const track = tracks[Math.floor(Math.random() * tracks.length)]
+      const { sound: newSound } = await Audio.Sound.createAsync(track, { volume, isLooping: true })
+      if (isMounted) {
+        setSound(newSound)
+        await newSound.playAsync()
+      }
+    }
+    playMusic()
+    return () => {
+      isMounted = false
+      if (sound) {
+        sound.stopAsync()
+        sound.unloadAsync()
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicType])
+
+  // Cambiar volumen
+  useEffect(() => {
+    if (sound) sound.setVolumeAsync(volume)
+  }, [volume, sound])
   const [state, setState]           = useState<CombatState>(() => TurnManager.initCombat(player, boss))
   const [bossHit, setBossHit]       = useState(false)
   const [playerHit, setPlayerHit]   = useState(false)
@@ -270,6 +323,31 @@ export const CombatScreen = ({
 
   return (
     <View style={styles.container}>
+      {/* ── Control de música y volumen ─────────────── */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 12 }}>
+        <TouchableOpacity
+          style={{ backgroundColor: musicType === 'combat' ? Colors.primary : '#222', borderRadius: 8, padding: 8 }}
+          onPress={() => setMusicType('combat')}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>🎵 Combate</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ backgroundColor: musicType === 'ambient' ? Colors.primary : '#222', borderRadius: 8, padding: 8 }}
+          onPress={() => setMusicType('ambient')}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>🌅 Ambient</Text>
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12 }}>
+          <Text style={{ color: '#fff', marginRight: 6 }}>🔊</Text>
+          <TouchableOpacity onPress={() => setVolume(Math.max(0, volume - 0.1))} style={{ padding: 4 }}>
+            <Text style={{ color: '#fff', fontSize: 18 }}>➖</Text>
+          </TouchableOpacity>
+          <Text style={{ color: '#fff', minWidth: 32, textAlign: 'center' }}>{Math.round(volume * 100)}%</Text>
+          <TouchableOpacity onPress={() => setVolume(Math.min(1, volume + 0.1))} style={{ padding: 4 }}>
+            <Text style={{ color: '#fff', fontSize: 18 }}>➕</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
       {/* ── Botón Salir ───────────────────────────────── */}
       <TouchableOpacity style={styles.topExitBtn} onPress={onExit}>
         <Ionicons name="close" size={18} color="rgba(255,255,255,0.5)" />
