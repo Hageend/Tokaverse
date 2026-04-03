@@ -8,7 +8,7 @@ import {
 import Animated, { FadeInUp, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import { Colors } from '../constants/Colors'
-import { DEMO_CARDS } from '../engine/FusionEngine'
+import { useInventoryStore, InventoryItem } from '../store/useInventoryStore'
 import { FusionEngine } from '../engine/FusionEngine'
 import { ELEMENT_INFO } from '../types/elements'
 import type { PlayerCard, FusionResult } from '../types/fusion'
@@ -31,6 +31,20 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
   const [equippedCards, setEquippedCards] = useState<(PlayerCard | null)[]>([null, null, null])
   const [detectedFusions, setDetectedFusions] = useState<FusionResult[]>([])
   const [showCardPicker, setShowCardPicker] = useState<number | null>(null)
+
+  // Obtener cartas reales del inventario
+  const inventoryItems = useInventoryStore(s => s.items)
+  const myCards: PlayerCard[] = inventoryItems
+    .filter(item => item.type === 'card')
+    .map(item => ({
+      cardId: item.templateId || 'c001', // ID de la receta (templateId)
+      instanceId: item.id,               // ID único de la instancia
+      name: item.name,
+      rarity: item.rarity as any,
+      product: item.product || 'despensa',
+      element: item.element || 'ice',
+      passiveBonus: item.passiveBonus
+    })) as any // Casting a bit because we added instanceId which is not in PlayerCard type yet but helpful
 
   // Glow animation para las fusiones detectadas
   const glowAnim = useSharedValue(0.4)
@@ -210,11 +224,18 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
                 <Ionicons name="close" size={24} color="#FFF" />
               </TouchableOpacity>
             </View>
-            <ScrollView>
-              {DEMO_CARDS.map(card => {
-                const rarCfg  = RARITY_CONFIG[card.rarity]
-                const elemInf = ELEMENT_INFO[card.element]
-                const alreadyEquipped = equippedCards.some((c, i) => c?.cardId === card.cardId && i !== showCardPicker)
+            <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+              {myCards.length === 0 ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.2)" />
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginTop: 12 }}>
+                    No tienes cartas en tu inventario. ¡Derrota jefes para conseguirlas!
+                  </Text>
+                </View>
+              ) : myCards.map((card: any) => {
+                const rarCfg  = RARITY_CONFIG[card.rarity as keyof typeof RARITY_CONFIG] || RARITY_CONFIG.common
+                const elemInf = ELEMENT_INFO[card.element as keyof typeof ELEMENT_INFO]
+                const alreadyEquipped = equippedCards.some((c: any, i) => c?.instanceId === card.instanceId && i !== showCardPicker)
                 return (
                   <TouchableOpacity
                     key={card.cardId}

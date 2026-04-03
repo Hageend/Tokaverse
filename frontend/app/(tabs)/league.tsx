@@ -4,6 +4,7 @@ import { Colors } from '../../constants/Colors';
 import { io, Socket } from 'socket.io-client';
 import LottieView from 'lottie-react-native';
 import Constants from 'expo-constants';
+import { LeagueRanking } from '../../components/league/LeagueRanking';
 
 interface UserProfile {
   id: string;
@@ -264,7 +265,7 @@ export default function LeagueScreen() {
            {/* TRANSACTION SIMULATORS (Toka Products) */}
            <View style={styles.transactionHub}>
                <TouchableOpacity style={styles.txnButton} onPress={() => handleSimulateTransaction(100, 'Toka Despensa')}>
-                   <Text style={styles.txnBtnText}>🛒 Compra Despensa (+100 XP)</Text>
+                   <Text style={styles.txnBtnText}>🛍 Compra Despensa (+100 XP)</Text>
                </TouchableOpacity>
                <TouchableOpacity style={[styles.txnButton, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.3)' }]} onPress={() => handleSimulateTransaction(150, 'Toka Combustible')}>
                    <Text style={[styles.txnBtnText, { color: '#60A5FA' }]}>⛽ Carga Gasolina (+150 XP)</Text>
@@ -274,7 +275,6 @@ export default function LeagueScreen() {
                </TouchableOpacity>
            </View>
         </View>
-
 
         {leagues.length === 0 ? (
           <Text style={styles.noLeagues}>No hay torneos disponibles.</Text>
@@ -370,36 +370,15 @@ export default function LeagueScreen() {
                   </View>
                 )}
 
-                {/* Tabla de Clasificación */}
+                {/* Tabla de Clasificación RPG */}
                 {isExpanded && (
-                  <View style={styles.rankingList}>
-                    {league.ranking.length === 0 ? (
-                       <Text style={{color: Colors.textMuted, alignSelf:'center'}}>Nadie ha puntuado en esta liga todavía.</Text>
-                    ) : (
-                      league.ranking.sort((a,b) => a.position - b.position).map((r) => (
-                        <View key={r.userId} style={[styles.rankingRow, r.userId === USER_ID && styles.rankingRowActive]}>
-                          <Text style={styles.rankingPos}>#{r.position}</Text>
-                          <Text style={[styles.rankingUser, r.userId === USER_ID && { fontWeight: '700', color: Colors.textPrimary }]}>
-                            {r.userId === USER_ID ? 'Tú' : r.userId}
-                          </Text>
-                          <Text style={styles.rankingPoints}>{r.points} pts</Text>
-                        </View>
-                      ))
-                    )}
-                    
-                    <TouchableOpacity style={styles.adminButton} onPress={() => handleResolveTournament(league.id)}>
-                      <Text style={styles.adminButtonText}>Cerrar torneo y otorgar premios</Text>
-                    </TouchableOpacity>
-                    
-                    {myStats && myStats.rewards.length > 0 && (
-                      <View style={styles.rewardsSection}>
-                         <Text style={styles.rewardsTitle}>Tus recompensas semanales:</Text>
-                         {myStats.rewards.map((rew, i) => (
-                             <Text key={i} style={styles.rewardItem}>🏆 {rew}</Text>
-                         ))}
-                      </View>
-                    )}
-                  </View>
+                  <LeagueRanking
+                    ranking={league.ranking}
+                    currentUserId={USER_ID}
+                    tier={league.tier}
+                    leagueId={league.id}
+                    onResolve={handleResolveTournament}
+                  />
                 )}
               </View>
             );

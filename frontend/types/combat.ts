@@ -4,7 +4,7 @@
 import type { Element } from './elements'
 import type { StatusEffectRich } from '../engine/StatusEngine'
 
-export type CharacterClass = 'mage' | 'archer' | 'warrior' | 'rogue' | 'banker' | 'kitsune'
+export type CharacterClass = 'mage' | 'archer' | 'warrior' | 'rogue' | 'banker' | 'kitsune' | 'hacker' | 'knight' | 'thief' | 'magedark' | 'cat' | 'dog' | 'fox'
 
 export interface Fighter {
   id:             string
@@ -75,6 +75,8 @@ export type FinancialAction =
   | 'budget_respected'
   | 'early_payment'
   | 'goal_completed'
+  | 'late_payment'
+  | 'financial_error'
 
 export type DebtWeakness = {
   action:      FinancialAction

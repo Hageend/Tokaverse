@@ -16,6 +16,7 @@ export type CombatAction =
   | { type: 'FINANCIAL_ACTION'; action: string; multiplier: number }
   | { type: 'FUSION';            fusionId: string }
   | { type: 'ATTACK_MINION';    minionId: string }
+  | { type: 'USE_ITEM';          itemId: string; hpHeal?: number; manaHeal?: number }
 
 export interface CombatLog {
   turn:             number
@@ -101,7 +102,9 @@ export class TurnManager {
       phase:           enrichedPlayer.speed >= 10 ? 'player_turn' : 'boss_turn',
       log: [{
         turn: 0, actor: 'system', action: 'SPAWN',
-        message: `⚠️ ¡${boss.name} ha aparecido! Monto: $${boss.debtAmount.toLocaleString('es-MX')} MXN`,
+        message: boss.debtAmount > 0 
+          ? `⚠️ ¡${boss.name} aparece! Monto: $${boss.debtAmount.toLocaleString('es-MX')} MXN`
+          : `⚠️ ¡${boss.name} bloquea el camino!`,
       }, {
         turn: 0, actor: 'system', action: 'ELEMENT_INFO',
         message: `${ELEMENT_INFO[playerElement]?.emoji} Tu elemento: ${ELEMENT_INFO[playerElement]?.label} · Disponibles: ${fusions.length} fusión(es)`,
@@ -293,7 +296,21 @@ export class TurnManager {
         break
       }
 
-      default: break
+      case 'USE_ITEM': {
+        if (action.hpHeal) {
+          const heal = Math.min(action.hpHeal, s.player.maxHp - s.player.hp);
+          s.player   = { ...s.player, hp: s.player.hp + heal };
+          s.log.push({ turn: s.turn, actor: 'player', action: 'USE_ITEM', heal, message: `🧪 ${s.player.name} usa un objeto y recupera ${heal} HP.` });
+        }
+        if (action.manaHeal) {
+          const mana = Math.min(action.manaHeal, (s.player.maxMana ?? 100) - s.player.mana);
+          s.player   = { ...s.player, mana: s.player.mana + mana };
+          s.log.push({ turn: s.turn, actor: 'player', action: 'USE_ITEM', message: `🧪 ${s.player.name} recupera ${mana} Mana.` });
+        }
+        break;
+      }
+
+      default: break;
     }
 
     s.lastPlayerAction = action.type
@@ -370,7 +387,10 @@ export class TurnManager {
       s.log.push({ turn: s.turn, actor: 'boss', action: 'STUN', message: `😵 ${s.boss.name} está aturdido — pierde este turno.` })
     } else {
       // 5. Seleccionar skill del jefe según fase actual
-      const availableSkills = s.boss.skills.filter(sk => sk.usableAtPhase.includes(s.boss.phase))
+      let availableSkills = s.boss.skills.filter(sk => sk.usableAtPhase.includes(s.boss.phase))
+      
+      // Fallback si no hay skills para esta fase (sucede en mobs simples)
+      if (availableSkills.length === 0) availableSkills = s.boss.skills;
 
       // Mecánica "Cargo por mora" fase 2+: si el jefe recibió 3 ataques consecutivos → daño x2
       const consecutiveDmgBonus = (s.boss.phase >= 2 && s.consecutiveBossHits >= 3) ? 2.0 : 1.0

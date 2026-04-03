@@ -3,6 +3,8 @@
 // Sistema Híbrido: Elementos · Fusiones · Fases · Estados Alterados
 
 import React, { useState, useEffect, useRef } from 'react';
+import { InventoryModal } from '../../components/quest/InventoryModal';
+import { useInventoryStore, BOSS_DROPS, selectRandomDrop } from '../../store/useInventoryStore';
 import { Audio } from 'expo-av';
 
 
@@ -22,12 +24,15 @@ import {
 import { io, Socket } from 'socket.io-client';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
-import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
+import Animated, { 
+  FadeInUp, FadeIn, 
+  useSharedValue, useAnimatedStyle, withSpring 
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { CharacterAvatar } from '../../components/CharacterAvatar';
-import CombatScreen from '../../components/CombatScreen';
+import UnifiedCombatScreen from '../../components/UnifiedCombatScreen';
 import FusionPreCombat from '../../components/FusionPreCombat';
 import { BossEngine } from '../../engine/BossEngine';
 import { CLASS_FIGHTERS, CHAR_SPRITES } from '../../data/classSkills';
@@ -35,22 +40,34 @@ import type { ClassKey } from '../../data/classSkills';
 import { Boss, Fighter } from '../../types/combat';
 import { ELEMENT_INFO, BOSS_ELEMENTS, CLASS_ELEMENTS } from '../../types/elements';
 import type { PlayerCard } from '../../types/fusion';
+import { EnemyMapper } from '../../utils/EnemyMapper';
+import { QUEST_ENEMIES } from '../../store/useCombatStore';
+import { Dimensions } from 'react-native';
+
+const { height: SCREEN_H } = Dimensions.get('window');
 
 // ─── Clases JRPG ─────────────────────────────────────────────────────────
 const JRPG_CLASSES = [
-  { id: 'mage',    name: 'Mahōtsukai', subtitle: '(Mago)',      stat: 'Sabiduría',   bonus: '+15% XP en ahorro',           sprite: CHAR_SPRITES.mage    },
-  { id: 'warrior', name: 'Samurai',    subtitle: '(Guerrero)',   stat: 'Fuerza',      bonus: '+25% Resistencia a daño',      sprite: CHAR_SPRITES.warrior },
-  { id: 'rogue',   name: 'Shinobi',    subtitle: '(Ninja)',      stat: 'Agilidad',    bonus: '+20% Recompensas Cashback',    sprite: CHAR_SPRITES.rogue   },
-  { id: 'archer',  name: 'Yushu',      subtitle: '(Arquero)',    stat: 'Destreza',    bonus: 'x2 recompensa metas largas',   sprite: CHAR_SPRITES.archer  },
-  { id: 'banker',  name: 'Shōnin',     subtitle: '(Mercader)',   stat: 'Riqueza',     bonus: '+30% XP en inversiones',       sprite: CHAR_SPRITES.banker  },
-  { id: 'kitsune', name: 'Kitsune',    subtitle: '(Espiritual)', stat: 'Misticismo',  bonus: 'Veneno + curación automática', sprite: CHAR_SPRITES.kitsune },
+  { id: 'mage',     name: 'Mahōtsukai', subtitle: '(Mago)',      stat: 'Sabiduría',   bonus: '+15% XP en ahorro',           sprite: CHAR_SPRITES.mage    },
+  { id: 'warrior',  name: 'Samurai',    subtitle: '(Guerrero)',   stat: 'Fuerza',      bonus: '+25% Resistencia a daño',      sprite: CHAR_SPRITES.warrior },
+  { id: 'hacker',   name: 'Hacker',     subtitle: '(Ciber-Mago)', stat: 'Lógica',      bonus: '+15% Crit Rate',              sprite: CHAR_SPRITES.hacker  },
+  { id: 'knight',   name: 'Caballero',  subtitle: '(Tanque)',     stat: 'Voluntad',    bonus: '+40% HP Máximo',               sprite: CHAR_SPRITES.knight  },
+  { id: 'rogue',    name: 'Shinobi',    subtitle: '(Ninja)',      stat: 'Agilidad',    bonus: '+20% Recompensas Cashback',    sprite: CHAR_SPRITES.rogue   },
+  { id: 'archer',   name: 'Yushu',      subtitle: '(Arquero)',    stat: 'Destreza',    bonus: 'x2 recompensa metas largas',   sprite: CHAR_SPRITES.archer  },
+  { id: 'banker',   name: 'Shōnin',     subtitle: '(Mercader)',   stat: 'Riqueza',     bonus: '+30% XP en inversiones',       sprite: CHAR_SPRITES.banker  },
+  { id: 'kitsune',  name: 'Kitsune',    subtitle: '(Espiritual)', stat: 'Misticismo',  bonus: 'Veneno + curación automática', sprite: CHAR_SPRITES.kitsune },
+  { id: 'thief',    name: 'Gōtō',       subtitle: '(Ladrón)',     stat: 'Sigilo',      bonus: '+50% Drop Rate',               sprite: CHAR_SPRITES.thief   },
+  { id: 'magedark', name: 'Ankoku',     subtitle: '(Mago Oscuro)',stat: 'Caos',        bonus: '+25% Daño Mágico',             sprite: CHAR_SPRITES.magedark},
+  { id: 'dog',      name: 'Inu',        subtitle: '(Perro)',      stat: 'Lealtad',     bonus: '+15% Defensa Base',            sprite: CHAR_SPRITES.dog, locked: true },
+  { id: 'cat',      name: 'Neko',       subtitle: '(Gato)',       stat: 'Suerte',      bonus: '+20% Evasión',                 sprite: CHAR_SPRITES.cat, locked: true },
+  { id: 'fox',      name: 'Kitsune-bi', subtitle: '(Zorro)',      stat: 'Espíritu',    bonus: '+15% Regeneración Maná',       sprite: CHAR_SPRITES.fox },
 ] as const;
 
 type ClassId = typeof JRPG_CLASSES[number]['id'];
 
 // ─── Hábitos y Dailies ────────────────────────────────────────────────────
 const HABITS = [
-  { id: 'h1', title: 'Compra de Despensa Toka',     icon: '🛒', type: 'positive' as const, xp: 20  },
+  { id: 'h1', title: 'Compra de Despensa Toka',     icon: '🛒', pixelIcon: 'item_chest', type: 'positive' as const, xp: 20  },
   { id: 'h2', title: 'Carga Eficiente de Gasolina', icon: '⛽', type: 'positive' as const, xp: 25  },
   { id: 'h3', title: 'Comprobación a Tiempo',        icon: '📋', type: 'positive' as const, xp: 30  },
   { id: 'h4', title: 'Gasto Impulsivo Extra',        icon: '🎰', type: 'negative' as const, hpPenalty: 25 },
@@ -59,18 +76,34 @@ const HABITS = [
 const DAILIES = [
   { id: 'd1', title: 'Subir comprobante Connect',  icon: '📸', completed: false, xp: 60,  hpPenalty: 20 },
   { id: 'd2', title: 'Registrar odómetro diario',  icon: '📊', completed: false, xp: 70,  hpPenalty: 25 },
-  { id: 'd3', title: 'Completar "Quest Mercadito"', icon: '🛒', completed: false, xp: 100, hpPenalty: 40 },
+  { id: 'd3', title: 'Completar "Quest Mercadito"', icon: '🛒', pixelIcon: 'item_chest', completed: false, xp: 100, hpPenalty: 40 },
 ];
 
 // ─── Jefes disponibles ───────────────────────────────────────────────────
 const DEMO_BOSSES = [
-  { label: 'El Carrito Vacío',        icon: '🛒', type: 'toka_despensa' as const, amount: 2500,  daysOverdue: 0,  difficulty: 'Fácil',    diffColor: '#22C55E' },
+  { label: 'El Carrito Vacío',        icon: '🛒', pixelIcon: 'item_chest', type: 'toka_despensa' as const, amount: 2500,  daysOverdue: 0,  difficulty: 'Fácil',    diffColor: '#22C55E' },
   { label: 'El Tanque Vacío',         icon: '⛽', type: 'toka_fuel'     as const, amount: 1500,  daysOverdue: 5,  difficulty: 'Normal',   diffColor: '#F59E0B' },
   { label: 'El Gasto Sin Comprobar',  icon: '📑', type: 'toka_connect'  as const, amount: 8000,  daysOverdue: 15, difficulty: 'Difícil',  diffColor: '#EF4444', interestRate: 10 },
-  { label: 'Tarjeta Maldita',         icon: '🃏', type: 'credit_card'   as const, amount: 5000,  daysOverdue: 45, difficulty: '🌋 Épico', diffColor: '#FF6B35', interestRate: 36 },
+  { label: 'El Abismo de Deuda',      icon: '🕳️', pixelIcon: 'item_card', type: 'abyss' as const,         amount: 15000, daysOverdue: 30, difficulty: '🌋 Épico', diffColor: '#9333ea' },
+  { label: 'Golem de Facturas',       icon: '🧱', type: 'golem' as const,         amount: 12000, daysOverdue: 20, difficulty: 'Difícil',  diffColor: '#475569' },
+  { label: 'Lluvia de Tickets',       icon: '🌧️', type: 'tickets' as const,       amount: 3000,  daysOverdue: 10, difficulty: 'Normal',   diffColor: '#2563eb' },
+  { label: 'Monstruo de Efectivo',    icon: '💵', type: 'cash' as const,          amount: 25000, daysOverdue: 60, difficulty: '👹 Infernal', diffColor: '#16a34a' },
+  { label: 'Tarjeta Maldita',         icon: '🃏', pixelIcon: 'item_card', type: 'credit_card'   as const, amount: 5000,  daysOverdue: 45, difficulty: '🌋 Épico', diffColor: '#FF6B35', interestRate: 36 },
 ];
 
+// ─── Mapeo de Assets Pixel Art ────────────────────────────────────────────────
+const PIXEL_ART_ASSETS: Record<string, any> = {
+  item_sword:  require('../../assets/images/items/item_sword.png'),
+  item_shield: require('../../assets/images/items/item_shield.png'),
+  item_potion: require('../../assets/images/items/item_potion.png'),
+  item_card:   require('../../assets/images/items/item_card.png'),
+  item_chest:  require('../../assets/images/items/item_chest.png'),
+};
+
 const USER_ID = 'user_123';
+// ... (rest of the setup logic stays the same)
+// ...
+
 const getApiUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
   let host = Constants.expoConfig?.hostUri?.split(':')[0];
@@ -184,8 +217,27 @@ export default function QuestsScreen() {
   const [dailies, setDailies] = useState(DAILIES);
   const [isTakingDamage, setDamage]    = useState(false);
   const [isAttacking,    setAttacking] = useState(false);
+  const [showInventory, setShowInventory] = useState(false);
+
+
+  const { addItem: addInventoryItem, items: inventoryItems, maxSlots } = useInventoryStore();
 
   const currentClass = JRPG_CLASSES[classIndex];
+
+  // ─── ANIMACIONES 60FPS (Barras) ─────────────────────────────────────────
+  const hpProgress   = useSharedValue(hp / hpMax);
+  const manaProgress = useSharedValue(mana / manaMax);
+  const xpProgress   = useSharedValue(Math.max(0, (xp - prevThresh) / (xpMax - prevThresh || 1)));
+
+  useEffect(() => { hpProgress.value = withSpring(hp / hpMax, { damping: 15 }); }, [hp, hpMax, hpProgress]);
+  useEffect(() => { manaProgress.value = withSpring(mana / manaMax, { damping: 15 }); }, [mana, manaMax, manaProgress]);
+  useEffect(() => { 
+    xpProgress.value = withSpring(Math.max(0, (xp - prevThresh) / (xpMax - prevThresh || 1)), { damping: 15 }); 
+  }, [xp, xpMax, prevThresh, xpProgress]);
+
+  const hpBarStyle   = useAnimatedStyle(() => ({ width: `${hpProgress.value * 100}%` }));
+  const manaBarStyle = useAnimatedStyle(() => ({ width: `${manaProgress.value * 100}%` }));
+  const xpBarStyle   = useAnimatedStyle(() => ({ width: `${xpProgress.value * 100}%` }));
 
   // ── Helpers RPG ────────────────────────────────────────────────────────
   const gainXp = async (amount: number, source = 'Acción de Misión') => {
@@ -205,7 +257,7 @@ export default function QuestsScreen() {
     setDamage(true);
     const newHp = hp - amount;
     if (newHp <= 0) {
-      Alert.alert('ゲームオーバー (¡Caíste!)', 'Has perdido vitalidad y algo de experiencia por descuido financiero.');
+      Alert.alert('¡FIN DEL JUEGO! (Caíste)', 'Has perdido vitalidad y algo de experiencia por descuido financiero.');
       setHp(hpMax);
       try {
         await fetch(`${API_URL}/users/${USER_ID}/transaction`, {
@@ -220,8 +272,15 @@ export default function QuestsScreen() {
     setTimeout(() => setDamage(false), 500);
   };
 
-  const selectBoss = (bossConfig: typeof DEMO_BOSSES[number]) => {
-    const boss    = BossEngine.generateFromDebt({ id: `boss_${bossConfig.type}`, ...bossConfig });
+  const selectBoss = (bossConfig: any) => {
+    let boss: Boss;
+    if (bossConfig.id && bossConfig.emoji) {
+      // Es un SimpleEnemy (Mob)
+      boss = EnemyMapper.simpleToBoss(bossConfig);
+    } else {
+      // Es un bossConfig (Legendary Debt)
+      boss = BossEngine.generateFromDebt({ id: `boss_${bossConfig.type}`, ...bossConfig });
+    }
     const fighter = CLASS_FIGHTERS[currentClass.id as ClassKey];
     setActiveBoss(boss);
     setActiveFighter({ ...fighter, name: currentClass.name });
@@ -236,11 +295,15 @@ export default function QuestsScreen() {
   };
 
   const handleVictory = (boss: Boss) => {
-    gainXp(500);
-    Alert.alert('🏆 ¡Victoria!', `Derrotaste a ${boss.name}\n+500 XP · Loot Box desbloqueada`);
+    // Ya no es necesario dar XP o Items aquí ni mostrar Alertas, 
+    // todo se maneja dentro de UnifiedCombatScreen.
+    console.log(`[Combat] Derrotaste a ${boss.name}. Limpiando estados.`);
   };
 
-  const handleDefeat = () => { takeDamage(30); };
+  const handleDefeat = () => { 
+    // Penalización base por derrota en combate
+    takeDamage(20); 
+  };
 
   // ── Sincronizar audio con combate ───────────────────────────────────────
   useEffect(() => {
@@ -251,7 +314,11 @@ export default function QuestsScreen() {
     }
   }, [inCombat, ambientSound]);
 
-  // ─── PRE-COMBAT ────────────────────────────────────────────────────────
+  // ─── Cálculos del elemento del personaje ──────────────────────────────
+  const classElem     = (CLASS_ELEMENTS as any)[currentClass.id];
+  const classElemInfo = classElem ? (ELEMENT_INFO as any)[classElem.primary] : null;
+
+
   if (inPreCombat && activeBoss) {
     return (
       <FusionPreCombat
@@ -262,31 +329,27 @@ export default function QuestsScreen() {
     );
   }
 
-  // ─── COMBAT ────────────────────────────────────────────────────────────
   if (inCombat && activeBoss && activeFighter) {
+    // Cambia a 'arena' para probar el modo arena, o deja 'full' para el combate completo
     return (
-      <CombatScreen
-        key={`combat_${activeBoss.id}_${Date.now()}`}
+      <UnifiedCombatScreen
+        key={`combat_${activeBoss.id}`}
         player={activeFighter}
-        boss={activeBoss}
+        opponent={activeBoss}
         equippedCards={selectedCards}
         onVictory={handleVictory}
         onDefeat={handleDefeat}
         onExit={() => setInCombat(false)}
         globalVolume={volume}
+        heroSprite={currentClass.sprite}
       />
     );
   }
 
-  // ─── Cálculos del elemento del personaje ──────────────────────────────
-  const classElem     = (CLASS_ELEMENTS as any)[currentClass.id];
-  const classElemInfo = classElem ? (ELEMENT_INFO as any)[classElem.primary] : null;
-
-  // ─── UI PRINCIPAL ──────────────────────────────────────────────────────
   return (
     <View style={[S.container, { paddingTop: Math.max(insets.top, 8) }]}>
 
-      {/* ── Barra de música y volumen ─────────────────────────────────── */}
+      {/* ── Barra de música, volumen e inventario ──────────────────────── */}
       <View style={S.musicBar}>
         <View style={S.musicLeft}>
           <Ionicons name="musical-notes" size={14} color={Colors.tertiary} />
@@ -296,27 +359,48 @@ export default function QuestsScreen() {
           </View>
         </View>
 
-        {/* Botón de volumen mejorado */}
-        <TouchableOpacity
-          style={S.volBtn}
-          onPress={() => setShowVolumePanel(v => !v)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Menú de volumen"
-          accessibilityRole="button"
-        >
-          <Ionicons
-            name={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'}
-            size={16}
-            color={Colors.tertiary}
-          />
-          <Text style={S.volBtnTxt}>{Math.round(volume * 100)}%</Text>
-          <Ionicons
-            name={showVolumePanel ? 'chevron-up' : 'chevron-down'}
-            size={11}
-            color="rgba(255,255,255,0.4)"
-          />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          {/* Botón de inventario */}
+          <TouchableOpacity
+            style={S.inventoryBtn}
+            onPress={() => setShowInventory(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Abrir inventario"
+            accessibilityRole="button"
+          >
+            <Image 
+              source={require('../../assets/images/items/item_chest.png')} 
+              style={{ width: 14, height: 14 }}
+              contentFit="contain"
+            />
+            <Text style={S.inventoryBtnTxt}>{inventoryItems.length}/{maxSlots}</Text>
+          </TouchableOpacity>
+
+          {/* Botón de volumen mejorado */}
+          <TouchableOpacity
+            style={S.volBtn}
+            onPress={() => setShowVolumePanel(v => !v)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Menú de volumen"
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'}
+              size={16}
+              color={Colors.tertiary}
+            />
+            <Text style={S.volBtnTxt}>{Math.round(volume * 100)}%</Text>
+            <Ionicons
+              name={showVolumePanel ? 'chevron-up' : 'chevron-down'}
+              size={11}
+              color="rgba(255,255,255,0.4)"
+            />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* ── Modal de Inventario ─────────────────────────────────────────── */}
+      <InventoryModal visible={showInventory} onClose={() => setShowInventory(false)} />
 
       {/* Panel de volumen expandible */}
       {showVolumePanel && (
@@ -368,7 +452,7 @@ export default function QuestsScreen() {
         <View style={S.overlay}>
           <View style={S.modalBox}>
             <View style={S.modalHdr}>
-              <Text style={S.modalTitle}>⚔️ 挑戦 — Seleccionar Jefe</Text>
+              <Text style={S.modalTitle}>⚔️ Selección de Jefe</Text>
               <TouchableOpacity
                 onPress={() => setShowBossSelect(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -377,51 +461,86 @@ export default function QuestsScreen() {
                 <Ionicons name="close-circle" size={28} color="rgba(255,255,255,0.6)" />
               </TouchableOpacity>
             </View>
-            <Text style={S.modalSub}>Elige la deuda enemiga que quieres confrontar hoy:</Text>
-            <View style={{ gap: 10 }}>
-              {DEMO_BOSSES.map((b, i) => {
-                const bossElemData = BOSS_ELEMENTS[b.type];
-                const elemInfo     = bossElemData ? (ELEMENT_INFO as any)[bossElemData.primary] : null;
-                const bossHp       = Math.min(Math.floor(b.amount / 10) + b.daysOverdue * 5, 9999);
-                const isEpic       = b.type === 'credit_card';
-                return (
-                  <Animated.View key={i} entering={FadeInUp.delay(i * 70)}>
+            <Text style={S.modalSub}>Elige la deuda o el obstáculo que quieres confrontar hoy:</Text>
+            
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: SCREEN_H * 0.6 }}>
+              <View style={{ gap: 12, paddingBottom: 20 }}>
+                
+                <Text style={S.modalSectionTitle}>🏛️ Deudas Legendarias (Historia)</Text>
+                {DEMO_BOSSES.map((b, i) => {
+                  const bossElemData = BOSS_ELEMENTS[b.type];
+                  const elemInfo     = bossElemData ? (ELEMENT_INFO as any)[bossElemData.primary] : null;
+                  const bossHp       = Math.min(Math.floor(b.amount / 10) + b.daysOverdue * 5, 9999);
+                  const isEpic       = b.type === 'credit_card';
+                  return (
+                    <Animated.View key={`boss_${i}`} entering={FadeInUp.delay(i * 50)}>
+                      <TouchableOpacity
+                        style={[S.bossCard, isEpic && { borderColor: 'rgba(255,107,53,0.5)', backgroundColor: 'rgba(255,107,53,0.08)' }]}
+                        onPress={() => selectBoss(b)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={S.bossCardTop}>
+                          {(b as any).pixelIcon ? (
+                            <Image 
+                              source={PIXEL_ART_ASSETS[(b as any).pixelIcon]} 
+                              style={{ width: 28, height: 28, marginRight: 10 }} 
+                              contentFit="contain" 
+                            />
+                          ) : (
+                            <Text style={S.bossCardIcon}>{b.icon}</Text>
+                          )}
+                          <View style={{ flex: 1 }}>
+                            <Text style={S.bossCardName}>{b.label}</Text>
+                            <Text style={S.bossCardSub}>
+                              ${b.amount.toLocaleString('es-MX')} MXN · {b.daysOverdue} días
+                            </Text>
+                          </View>
+                          <View style={[S.diffBadge, { backgroundColor: b.diffColor + '22', borderColor: b.diffColor + '55' }]}>
+                            <Text style={[S.diffTxt, { color: b.diffColor }]}>Boss</Text>
+                          </View>
+                        </View>
+                        <View style={S.bossCardBot}>
+                          <Text style={S.bossHpTxt}>❤️ {bossHp} HP · 4 fases</Text>
+                          {elemInfo && (
+                            <View style={[S.elemPill, { backgroundColor: elemInfo.color + '18', borderColor: elemInfo.color + '44' }]}>
+                              <Text style={[S.elemPillTxt, { color: elemInfo.color }]}>{elemInfo.emoji} {elemInfo.label}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  );
+                })}
+
+                <Text style={S.modalSectionTitle}>🌀 Obstáculos Comunes (Arena)</Text>
+                {QUEST_ENEMIES.map((e, i) => (
+                  <Animated.View key={`mob_${i}`} entering={FadeInUp.delay((i + 4) * 50)}>
                     <TouchableOpacity
-                      style={[S.bossCard, isEpic && { borderColor: 'rgba(255,107,53,0.5)', backgroundColor: 'rgba(255,107,53,0.08)' }]}
-                      onPress={() => selectBoss(b)}
+                      style={S.bossCard}
+                      onPress={() => selectBoss(e)}
                       activeOpacity={0.75}
                     >
                       <View style={S.bossCardTop}>
-                        <Text style={S.bossCardIcon}>{b.icon}</Text>
+                        <Text style={S.bossCardIcon}>{e.emoji}</Text>
                         <View style={{ flex: 1 }}>
-                          <Text style={S.bossCardName}>{b.label}</Text>
-                          <Text style={S.bossCardSub}>
-                            ${b.amount.toLocaleString('es-MX')} MXN · {b.daysOverdue} días de atraso
-                          </Text>
+                          <Text style={S.bossCardName}>{e.name}</Text>
+                          <Text style={S.bossCardSub}>Enemigo de práctica · {e.xpReward} XP</Text>
                         </View>
-                        <View style={[S.diffBadge, { backgroundColor: b.diffColor + '22', borderColor: b.diffColor + '55' }]}>
-                          <Text style={[S.diffTxt, { color: b.diffColor }]}>{b.difficulty}</Text>
+                        <View style={[S.diffBadge, { backgroundColor: '#3B82F622', borderColor: '#3B82F655' }]}>
+                          <Text style={[S.diffTxt, { color: '#3B82F6' }]}>Mob</Text>
                         </View>
                       </View>
                       <View style={S.bossCardBot}>
-                        <Text style={S.bossHpTxt}>❤️ {bossHp} HP · 4 fases</Text>
-                        {elemInfo && (
-                          <View style={[S.elemPill, { backgroundColor: elemInfo.color + '18', borderColor: elemInfo.color + '44' }]}>
-                            <Text style={[S.elemPillTxt, { color: elemInfo.color }]}>{elemInfo.emoji} {elemInfo.label}</Text>
-                          </View>
-                        )}
-                      </View>
-                      {isEpic && (
-                        <View style={S.epicWarn}>
-                          <Ionicons name="warning" size={11} color="#FF6B35" />
-                          <Text style={S.epicWarnTxt}>Jefe Legendario — 4 fases épicas · Mecánica Bancarrota</Text>
+                        <Text style={S.bossHpTxt}>❤️ {e.hp} HP · {e.maxPhases ?? 1} fase(s)</Text>
+                        <View style={[S.elemPill, { backgroundColor: '#94a3b818', borderColor: '#94a3b844' }]}>
+                          <Text style={[S.elemPillTxt, { color: '#94a3b8' }]}>🌚 Dark</Text>
                         </View>
-                      )}
+                      </View>
                     </TouchableOpacity>
                   </Animated.View>
-                );
-              })}
-            </View>
+                ))}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -431,7 +550,7 @@ export default function QuestsScreen() {
         <View style={S.overlay}>
           <View style={S.modalBox}>
             <View style={S.modalHdr}>
-              <Text style={S.modalTitle}>ステータス · Estado</Text>
+              <Text style={S.modalTitle}>Estado del Personaje</Text>
               <TouchableOpacity
                 onPress={() => setShowStatus(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -443,33 +562,55 @@ export default function QuestsScreen() {
             <Text style={S.modalSub}>Selecciona tu Camino Financiero:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 16 }}>
               {JRPG_CLASSES.map((cls, i) => {
-                const selected = classIndex === i;
-                return (
-                  <TouchableOpacity
-                    key={cls.id}
-                    style={[S.classCard, selected && S.classCardActive]}
-                    onPress={() => setClassIndex(i)}
-                    activeOpacity={0.8}
-                  >
-                    {selected && (
-                      <View style={S.activeTag}>
-                        <Text style={S.activeTagTxt}>ACTIVO</Text>
+                  const selected = classIndex === i;
+                  const locked = (cls as any).locked;
+                  return (
+                    <TouchableOpacity
+                      key={cls.id}
+                      style={[
+                        S.classCard, 
+                        selected && S.classCardActive,
+                        locked && S.classCardLocked
+                      ]}
+                      onPress={() => {
+                        if (locked) {
+                          Alert.alert('🛡️ Clase Bloqueada', 'Esta clase se desbloquea al alcanzar el Nivel 10 o mediante misiones especiales.');
+                          return;
+                        }
+                        setClassIndex(i);
+                      }}
+                      activeOpacity={locked ? 1 : 0.8}
+                    >
+                      {selected && (
+                        <View style={S.activeTag}>
+                          <Text style={S.activeTagTxt}>ACTIVO</Text>
+                        </View>
+                      )}
+                      
+                      {locked && (
+                        <View style={S.lockBadge}>
+                          <Ionicons name="lock-closed" size={16} color="#FFF" />
+                        </View>
+                      )}
+
+                      <Image
+                        source={typeof cls.sprite === 'number' ? cls.sprite : { uri: cls.sprite }}
+                        style={[
+                          S.classImg, 
+                          Platform.OS === 'web' && { imageRendering: 'pixelated' } as any,
+                          locked && { opacity: 0.3, tintColor: '#666' }
+                        ]}
+                        contentFit="contain"
+                        cachePolicy="memory-disk"
+                      />
+                      <Text style={[S.className, locked && { color: '#666' }]}>{cls.name}</Text>
+                      <Text style={S.classSubtitle}>{cls.subtitle}</Text>
+                      <Text style={S.classStat}>Stat: {cls.stat}</Text>
+                      <View style={[S.bonusBadge, locked && { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+                        <Text style={[S.bonusTxt, locked && { color: '#444' }]}>{cls.bonus}</Text>
                       </View>
-                    )}
-                    <Image
-                      source={typeof cls.sprite === 'number' ? cls.sprite : { uri: cls.sprite }}
-                      style={[S.classImg, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
-                      contentFit="contain"
-                      cachePolicy="memory-disk"
-                    />
-                    <Text style={S.className}>{cls.name}</Text>
-                    <Text style={S.classSubtitle}>{cls.subtitle}</Text>
-                    <Text style={S.classStat}>Stat: {cls.stat}</Text>
-                    <View style={S.bonusBadge}>
-                      <Text style={S.bonusTxt}>{cls.bonus}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
+                    </TouchableOpacity>
+                  );
               })}
             </ScrollView>
             <View style={S.divider} />
@@ -549,12 +690,11 @@ export default function QuestsScreen() {
                     </Text>
                   </View>
                   <View style={S.barBg}>
-                    <View
-                      style={[S.barFill, {
-                        width: `${Math.max(0, Math.min(100, (b.cur / (b.max || 1)) * 100))}%` as any,
-                        backgroundColor: b.color,
-                        shadowColor: b.color,
-                      }]}
+                    <Animated.View
+                      style={[S.barFill, 
+                        b.label === 'HP' ? hpBarStyle : b.label === 'MP' ? manaBarStyle : xpBarStyle,
+                        { backgroundColor: b.color, shadowColor: b.color }
+                      ]}
                     />
                   </View>
                 </View>
@@ -572,7 +712,11 @@ export default function QuestsScreen() {
           accessibilityRole="button"
         >
           <View style={S.combatBtnGlow} />
-          <Text style={S.combatBtnIcon}>⚔️</Text>
+          <Image 
+            source={require('../../assets/images/items/item_sword.png')} 
+            style={{ width: 24, height: 24, marginRight: 12 }} 
+            contentFit="contain" 
+          />
           <View style={{ flex: 1 }}>
             <Text style={S.combatBtnTitle}>¡A Combatir!</Text>
             <Text style={S.combatBtnSub}>Enfrenta tus deudas · Elige cartas · 4 fases</Text>
@@ -590,9 +734,9 @@ export default function QuestsScreen() {
         {/* ── Tabs ───────────────────────────────────────────────────── */}
         <View style={S.tabs}>
           {[
-            { key: 'HABITOS', label: '習慣 Hábitos' },
-            { key: 'DAILIES', label: '日課 Dailies'  },
-            { key: 'GRUPO',   label: '仲間 Grupo'    },
+            { key: 'HABITOS', label: 'Hábitos' },
+            { key: 'DAILIES', label: 'Dailies'  },
+            { key: 'GRUPO',   label: 'Grupo'    },
           ].map(t => {
             const active = activeTab === t.key;
             return (
@@ -618,7 +762,15 @@ export default function QuestsScreen() {
               <View style={S.card}>
                 <View style={[S.cardAccent, { backgroundColor: h.type === 'positive' ? '#10B981' : '#EF4444' }]} />
                 <View style={S.cardBody}>
-                  <Text style={S.cardIcon}>{h.icon}</Text>
+                  {(h as any).pixelIcon ? (
+                    <Image 
+                      source={PIXEL_ART_ASSETS[(h as any).pixelIcon]} 
+                      style={{ width: 24, height: 24, marginRight: 12 }} 
+                      contentFit="contain" 
+                    />
+                  ) : (
+                    <Text style={S.cardIcon}>{h.icon}</Text>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={S.cardTitle}>{h.title}</Text>
                     <Text style={[S.cardSub, { color: h.type === 'positive' ? '#10B981' : '#EF4444' }]}>
@@ -651,7 +803,15 @@ export default function QuestsScreen() {
               <View style={[S.card, d.completed && S.cardDone]}>
                 <View style={[S.cardAccent, { backgroundColor: d.completed ? '#10B981' : '#F59E0B' }]} />
                 <View style={S.cardBody}>
-                  <Text style={S.cardIcon}>{d.icon}</Text>
+                  {(d as any).pixelIcon ? (
+                    <Image 
+                      source={PIXEL_ART_ASSETS[(d as any).pixelIcon]} 
+                      style={{ width: 24, height: 24, marginRight: 12 }} 
+                      contentFit="contain" 
+                    />
+                  ) : (
+                    <Text style={S.cardIcon}>{d.icon}</Text>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={[S.cardTitle, d.completed && S.cardTitleDone]}>{d.title}</Text>
                     <Text style={[S.cardSub, { color: '#F59E0B' }]}>+{d.xp} XP · -{d.hpPenalty} HP si fallas</Text>
@@ -684,7 +844,7 @@ export default function QuestsScreen() {
               <View style={S.partyHeader}>
                 <Ionicons name="people" size={16} color={Colors.tertiary} />
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={S.partyTitle}>Guild: 赤い竜 — Dragón Rojo</Text>
+                  <Text style={S.partyTitle}>Gremio: Dragón Rojo</Text>
                   <Text style={S.partySub}>Si alguien falla, todos pierden HP. ¡Cooperen!</Text>
                 </View>
               </View>
@@ -749,6 +909,15 @@ const S = StyleSheet.create({
   musicTrack:  { color: '#FFF', fontSize: 12, fontWeight: '700' },
   musicStatus: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 1 },
 
+  // ── Botón de inventario ──────────────────────────────────────────────
+  inventoryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(251,191,36,0.12)',
+    borderWidth: 1, borderColor: 'rgba(251,191,36,0.3)',
+    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5,
+  },
+  inventoryBtnTxt: { color: '#fbbf24', fontSize: 10, fontWeight: '800' },
+
   // ── Botón de volumen ─────────────────────────────────────────────────
   volBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -801,6 +970,23 @@ const S = StyleSheet.create({
   // ── Modal Status ──────────────────────────────────────────────────────
   classCard:      { width: 140, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: 12, alignItems: 'center', position: 'relative' },
   classCardActive:{ borderColor: Colors.tertiary, backgroundColor: 'rgba(0,212,255,0.08)' },
+  classCardLocked: {
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    opacity: 0.8,
+  },
+  lockBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
   classImg:       { width: 80, height: 80, marginBottom: 8 },
   className:      { color: '#FFF', fontWeight: '900', fontSize: 14, textAlign: 'center' },
   classSubtitle:  { color: Colors.textMuted, fontSize: 11, marginBottom: 4 },
@@ -934,4 +1120,5 @@ const S = StyleSheet.create({
   partyLowWarn: { color: '#EF4444', fontSize: 10, fontWeight: '700', marginTop: 4 },
   healBtn:      { backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   healBtnTxt:   { color: '#FFF', fontWeight: '900', fontSize: 11 },
+  modalSectionTitle: { color: Colors.tertiary, fontSize: 12, fontWeight: '900', marginTop: 10, marginBottom: 4, letterSpacing: 1 },
 });
