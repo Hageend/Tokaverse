@@ -4,10 +4,9 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert, Image,
 } from 'react-native'
 import { Audio } from 'expo-av'
-import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import Animated, {
   useSharedValue, useAnimatedStyle,
@@ -23,13 +22,13 @@ import { Colors } from '../constants/Colors'
 import type { PlayerCard, FusionResult } from '../types/fusion'
 
 const COMBAT_TRACKS = [
-  require('../../assets/music/combat/Ascent_to_Victory.mp3'),
-  require('../../assets/music/combat/Beyond_The_Threshold.mp3'),
-  require('../../assets/music/combat/Kurenai_no_Kessen.mp3'),
-  require('../../assets/music/combat/Last_Hand_at_the_Gate.mp3'),
-  require('../../assets/music/combat/One_Last_Tile.mp3'),
-  require('../../assets/music/combat/The_Final_Tile.mp3'),
-]
+  require('../assets/music/combat/Ascent_to_Victory.mp3'),
+  require('../assets/music/combat/Beyond_The_Threshold.mp3'),
+  require('../assets/music/combat/Kurenai_no_Kessen.mp3'),
+  require('../assets/music/combat/Last_Hand_at_the_Gate.mp3'),
+  require('../assets/music/combat/One_Last_Tile.mp3'),
+  require('../assets/music/combat/The_Final_Tile.mp3'),
+];
 
 const PHASE_THEME_COLORS: Record<number, string> = {
   1: '#FFD700',
@@ -107,7 +106,7 @@ const AnimatedSprite = ({ spriteUrl, onHit, size = 100 }: { spriteUrl: any; onHi
       <Image
         source={typeof spriteUrl === 'number' ? spriteUrl : { uri: spriteUrl }}
         style={{ width: size, height: size }}
-        contentFit="contain"
+        resizeMode="contain"
       />
     </Animated.View>
   )
