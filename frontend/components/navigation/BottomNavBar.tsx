@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -16,7 +17,10 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { Colors } from '../../constants/Colors';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -151,25 +155,83 @@ function TabItemComponent({ item, isActive, onPress }: TabItemProps) {
 
 export function BottomNavBar({ activeTab, onTabPress }: BottomNavBarProps) {
   const insets = useSafeAreaInsets();
+  const expansion = useSharedValue(0);
 
-  // Don't render on web — web uses the top bar instead
+  const toggleMenu = useCallback(() => {
+    expansion.value = withTiming(expansion.value === 0 ? 1 : 0, { duration: 250 });
+  }, [expansion]);
+
+  const handleTabPress = (tab: TabKey) => {
+    onTabPress(tab);
+    // Auto-close removed as requested: "mejor que se cierre o abra manualmente"
+  };
+
+  // Gesto estilo iPhone: Deslizar un poco hacia arriba para abrir
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      if (e.translationY < -15 && expansion.value === 0) {
+        expansion.value = withTiming(1, { duration: 200 });
+      }
+      if (e.translationY > 15 && expansion.value === 1) {
+        expansion.value = withTiming(0, { duration: 200 });
+      }
+    })
+    .runOnJS(true);
+
+  const wrapperStyle = useAnimatedStyle(() => {
+    const width = interpolate(expansion.value, [0, 1], [40, SCREEN_WIDTH - 40]);
+    const borderRadius = interpolate(expansion.value, [0, 1], [20, 16]);
+    const translateY = interpolate(expansion.value, [0, 1], [8, 0]);
+    return {
+      width,
+      borderRadius,
+      transform: [{ translateY }],
+      paddingHorizontal: interpolate(expansion.value, [0, 1], [0, 6]),
+    };
+  });
+
+  const barStyle = useAnimatedStyle(() => ({
+    opacity: expansion.value,
+    transform: [{ scale: interpolate(expansion.value, [0, 1], [0.9, 1]) }],
+    pointerEvents: expansion.value > 0.6 ? 'auto' : 'none',
+  }));
+
+  const triggerStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(expansion.value, [0, 0.2], [1, 0]),
+    pointerEvents: expansion.value < 0.1 ? 'auto' : 'none',
+  }));
+
   if (Platform.OS === 'web') return null;
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {/* Separator line */}
-      <View style={styles.separator} />
+    <View style={[styles.outerWrapper, { bottom: Math.max(insets.bottom, 12) }]}>
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[styles.wrapper, wrapperStyle]}>
+          
+          {/* Expanded Tabs */}
+          <Animated.View style={[styles.bar, barStyle]}>
+            {TABS.map((tab) => (
+              <TabItemComponent
+                key={tab.key}
+                item={tab}
+                isActive={activeTab === tab.key}
+                onPress={() => handleTabPress(tab.key)}
+              />
+            ))}
+            <Pressable onPress={toggleMenu} style={styles.closeBtn}>
+              <Ionicons name="chevron-down" size={20} color="#FFF" />
+            </Pressable>
+          </Animated.View>
 
-      <View style={styles.bar}>
-        {TABS.map((tab) => (
-          <TabItemComponent
-            key={tab.key}
-            item={tab}
-            isActive={activeTab === tab.key}
-            onPress={() => onTabPress(tab.key)}
-          />
-        ))}
-      </View>
+          {/* iPhone Style Handle (Collapsed State) */}
+          <Animated.View style={[styles.trigger, triggerStyle]}>
+            <Pressable onPress={toggleMenu} style={styles.triggerInner} hitSlop={20}>
+              <View style={styles.iphoneHandle} />
+            </Pressable>
+          </Animated.View>
+
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
@@ -180,17 +242,26 @@ const PILL_WIDTH = 72;
 const PILL_HEIGHT = 52;
 
 const styles = StyleSheet.create({
-  wrapper: {
+  outerWrapper: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.navBg,
-    zIndex: 100,
+    left: 20,
+    bottom: 20,
+    zIndex: 1000,
+  },
+  wrapper: {
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    height: 60,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   separator: {
-    height: 1,
-    backgroundColor: Colors.navBorder,
+    display: 'none',
   },
   bar: {
     flexDirection: 'row',
@@ -244,10 +315,39 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   label: {
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    marginTop: 3,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginTop: 2,
     zIndex: 2,
+  },
+  trigger: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  triggerInner: {
+    width: 40,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iphoneHandle: {
+    width: 24,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    shadowColor: '#000',
+    shadowRadius: 2,
+    shadowOpacity: 0.5,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
   },
 });

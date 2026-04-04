@@ -28,14 +28,7 @@ function TabsLayout() {
       {/* Web top bar */}
       <WebTopBar activeTab={activeTab} onTabPress={handleTabPress} />
 
-      {/* Tab screens (headersShown false — we manage our own nav) */}
-      <View
-        style={[
-          styles.content,
-          // On mobile, add bottom padding so content is not hidden behind the nav bar
-          Platform.OS !== 'web' && { paddingBottom: 80 + Math.max(insets.bottom, 0) },
-        ]}
-      >
+      <View style={styles.content}>
         <Tabs
           screenOptions={{
             headerShown: false,

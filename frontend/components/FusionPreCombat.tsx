@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Colors } from '../constants/Colors'
 import { useInventoryStore, InventoryItem } from '../store/useInventoryStore'
 import { FusionEngine } from '../engine/FusionEngine'
-import { ELEMENT_INFO } from '../types/elements'
+import { ELEMENT_INFO, ELEMENT_CHART, Element } from '../types/elements'
 import type { PlayerCard, FusionResult } from '../types/fusion'
 import type { Boss } from '../types/combat'
 
@@ -75,6 +75,11 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
 
   const bossElemInfo = boss.element ? ELEMENT_INFO[boss.element] : null
 
+  // Encontrar debilidades del jefe basadas en el gráfico de elementos
+  const weaknesses = boss.element 
+    ? (Object.keys(ELEMENT_CHART) as Element[]).filter(el => (ELEMENT_CHART[el]?.[boss.element!] || 1) > 1)
+    : []
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -93,20 +98,33 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
         {/* Boss info card */}
         <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.bossCard}>
           <View style={styles.bossCardLeft}>
+            <Text style={styles.bossSubtitle}>OBJETIVO:</Text>
             <Text style={styles.bossCardName}>{boss.name}</Text>
-            <Text style={styles.bossCardHp}>❤️ {boss.hp} HP</Text>
-            {bossElemInfo && (
-              <View style={[styles.elemBadge, { backgroundColor: bossElemInfo.color + '22', borderColor: bossElemInfo.color + '55' }]}>
-                <Text style={[styles.elemBadgeTxt, { color: bossElemInfo.color }]}>
-                  {bossElemInfo.emoji} {bossElemInfo.label}
-                </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <Text style={styles.bossCardHp}>❤️ {boss.hp} HP</Text>
+              {bossElemInfo && (
+                <View style={[styles.elemBadge, { backgroundColor: bossElemInfo.color + '22', borderColor: bossElemInfo.color + '55' }]}>
+                  <Text style={[styles.elemBadgeTxt, { color: bossElemInfo.color }]}>
+                    {bossElemInfo.emoji} {bossElemInfo.label}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Hint de Debilidades — MEJORADO */}
+          {weaknesses.length > 0 && (
+            <View style={styles.hintBox}>
+              <Text style={styles.hintTitle}>💡 DEBILIDAD:</Text>
+              <View style={styles.hintRow}>
+                {weaknesses.map(w => (
+                  <View key={w} style={[styles.hintPill, { borderColor: ELEMENT_INFO[w].color + '66' }]}>
+                    <Text style={styles.hintPillTxt}>{ELEMENT_INFO[w].emoji}</Text>
+                  </View>
+                ))}
               </View>
-            )}
-          </View>
-          <View style={styles.phaseInfo}>
-            <Text style={styles.phaseLabel}>4 FASES</Text>
-            <Text style={styles.phaseSub}>Combate intenso</Text>
-          </View>
+            </View>
+          )}
         </Animated.View>
 
         {/* Slots de fusión */}
@@ -114,52 +132,65 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
           <Text style={styles.sectionTitle}>🃏 Equipa tus Cartas (máx. 3)</Text>
           <Text style={styles.sectionSub}>Cada carta da bonuses pasivos. Combina 2+ para activar Fusiones especiales.</Text>
           <View style={styles.slotsRow}>
-            {equippedCards.map((card, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.slot, card && styles.slotFilled]}
-                onPress={() => setShowCardPicker(i)}
-              >
-                {card ? (
-                  <>
-                    <Text style={styles.slotCardEmoji}>{ELEMENT_INFO[card.element]?.emoji ?? '🃏'}</Text>
-                    <Text style={styles.slotCardName} numberOfLines={2}>{card.name}</Text>
-                    <Text style={[styles.slotRarity, { color: RARITY_CONFIG[card.rarity].color }]}>
-                      {RARITY_CONFIG[card.rarity].label}
-                    </Text>
-                    <TouchableOpacity style={styles.removeBtn} onPress={() => equipCard(i, null)}>
-                      <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="add" size={28} color="rgba(255,255,255,0.2)" />
-                    <Text style={styles.slotEmpty}>Carta {i + 1}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            ))}
+            {equippedCards.map((card, i) => {
+              const isEmpty = !card;
+              // Animación de pulso para slots vacíos
+              const pulseStyle = useAnimatedStyle(() => ({
+                borderColor: isEmpty 
+                  ? withRepeat(withTiming('rgba(77,97,252,0.4)', { duration: 1000 }), -1, true)
+                  : Colors.primary,
+                transform: [{ scale: isEmpty ? withRepeat(withTiming(1.02, { duration: 1000 }), -1, true) : 1 }]
+              }));
+
+              return (
+                <TouchableOpacity
+                  key={i}
+                  activeOpacity={0.8}
+                  onPress={() => setShowCardPicker(i)}
+                >
+                  <Animated.View style={[styles.slot, card && styles.slotFilled, pulseStyle]}>
+                    {card ? (
+                      <>
+                        <Text style={styles.slotCardEmoji}>{ELEMENT_INFO[card.element]?.emoji ?? '🃏'}</Text>
+                        <Text style={styles.slotCardName} numberOfLines={2}>{card.name}</Text>
+                        <Text style={[styles.slotRarity, { color: RARITY_CONFIG[card.rarity].color }]}>
+                          {RARITY_CONFIG[card.rarity].label}
+                        </Text>
+                        <TouchableOpacity style={styles.removeBtn} onPress={() => equipCard(i, null)}>
+                          <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="add" size={28} color="rgba(77,97,252,0.3)" />
+                        <Text style={styles.slotEmpty}>Slot {i + 1}</Text>
+                      </>
+                    )}
+                  </Animated.View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </Animated.View>
 
-        {/* Bonuses pasivos */}
+        {/* Bonuses pasivos — PILLS COMPACTAS */}
         {(passiveBonus.damageBonus > 0 || passiveBonus.speedBonus > 0 || passiveBonus.manaBonus > 0) && (
           <Animated.View entering={FadeInUp.delay(280).duration(350)} style={styles.passiveBox}>
-            <Text style={styles.passiveTitle}>📊 Bonuses Pasivos Activos</Text>
+            <Text style={styles.passiveTitle}>Bonuses Activos:</Text>
             <View style={styles.passiveRow}>
               {passiveBonus.damageBonus > 0 && (
-                <View style={styles.passiveBadge}>
-                  <Text style={styles.passiveBadgeTxt}>⚔️ +{Math.round(passiveBonus.damageBonus * 100)}% DMG</Text>
+                <View style={[styles.passivePill, { borderColor: '#10B98133', backgroundColor: '#10B98115' }]}>
+                  <Text style={[styles.passivePillTxt, { color: '#10B981' }]}>⚔️ +{Math.round(passiveBonus.damageBonus * 100)}% DMG</Text>
                 </View>
               )}
               {passiveBonus.speedBonus > 0 && (
-                <View style={[styles.passiveBadge, { borderColor: '#FF6B35' }]}>
-                  <Text style={styles.passiveBadgeTxt}>⚡ +{Math.round(passiveBonus.speedBonus * 100)}% VEL</Text>
+                <View style={[styles.passivePill, { borderColor: '#F59E0B33', backgroundColor: '#F59E0B15' }]}>
+                  <Text style={[styles.passivePillTxt, { color: '#F59E0B' }]}>⚡ +{Math.round(passiveBonus.speedBonus * 100)}% VEL</Text>
                 </View>
               )}
               {passiveBonus.manaBonus > 0 && (
-                <View style={[styles.passiveBadge, { borderColor: '#3B82F6' }]}>
-                  <Text style={styles.passiveBadgeTxt}>💧 +{Math.round(passiveBonus.manaBonus * 100)}% MANA</Text>
+                <View style={[styles.passivePill, { borderColor: '#3B82F633', backgroundColor: '#3B82F615' }]}>
+                  <Text style={[styles.passivePillTxt, { color: '#3B82F6' }]}>💧 +{Math.round(passiveBonus.manaBonus * 100)}% MANA</Text>
                 </View>
               )}
             </View>
@@ -279,15 +310,19 @@ const styles = StyleSheet.create({
   title:        { color: '#FFF', fontSize: 22, fontWeight: '900' },
   subtitle:     { color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 2 },
 
-  bossCard:     { backgroundColor: '#1A2235', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', padding: 14, marginBottom: 24, flexDirection: 'row', alignItems: 'center' },
+  bossCard:     { backgroundColor: '#1A2235', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', padding: 14, marginBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 12 },
   bossCardLeft: { flex: 1 },
-  bossCardName: { color: '#EF4444', fontWeight: '900', fontSize: 16, marginBottom: 4 },
-  bossCardHp:   { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
-  elemBadge:    { alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  bossSubtitle: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '900', marginBottom: 2 },
+  bossCardName: { color: '#EF4444', fontWeight: '900', fontSize: 18, marginBottom: 2 },
+  bossCardHp:   { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  elemBadge:    { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   elemBadgeTxt: { fontSize: 11, fontWeight: '700' },
-  phaseInfo:    { alignItems: 'center', paddingLeft: 12 },
-  phaseLabel:   { color: '#EF4444', fontWeight: '900', fontSize: 14 },
-  phaseSub:     { color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 2 },
+  
+  hintBox:      { backgroundColor: 'rgba(0,0,0,0.3)', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
+  hintTitle:    { color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '900', marginBottom: 6 },
+  hintRow:      { flexDirection: 'row', gap: 6 },
+  hintPill:     { width: 30, height: 30, borderRadius: 15, borderWidth: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)' },
+  hintPillTxt:  { fontSize: 16 },
 
   sectionTitle: { color: '#FFF', fontSize: 14, fontWeight: '900', marginBottom: 6, letterSpacing: 0.5 },
   sectionSub:   { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginBottom: 14, lineHeight: 16 },
@@ -301,11 +336,11 @@ const styles = StyleSheet.create({
   slotEmpty:    { color: 'rgba(255,255,255,0.2)', fontSize: 10, marginTop: 4 },
   removeBtn:    { position: 'absolute', top: 4, right: 4 },
 
-  passiveBox:   { backgroundColor: '#111827', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', padding: 12, marginBottom: 20 },
-  passiveTitle: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '700', marginBottom: 8 },
+  passiveBox:   { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 12, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  passiveTitle: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   passiveRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  passiveBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#22C55E', backgroundColor: 'rgba(34,197,94,0.1)' },
-  passiveBadgeTxt: { color: '#22C55E', fontSize: 11, fontWeight: '700' },
+  passivePill:  { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  passivePillTxt: { fontSize: 11, fontWeight: '800' },
 
   fusionCard:   { backgroundColor: '#111827', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12, shadowOffset: { width: 0, height: 0 } },
   fusionIcon:   { width: 48, height: 48, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },

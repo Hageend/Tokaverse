@@ -28,7 +28,7 @@ export interface Fighter {
 export interface Boss {
   id:              string
   name:            string
-  debtType:        'credit_card' | 'service' | 'loan' | 'overdraft' | 'toka_despensa' | 'toka_fuel' | 'toka_connect'
+  debtType:        'credit_card' | 'service' | 'loan' | 'overdraft' | 'toka_despensa' | 'toka_fuel' | 'toka_connect' | 'abyss' | 'golem' | 'tickets' | 'cash'
   hp:              number
   maxHp:           number
   attack:          number
@@ -85,7 +85,7 @@ export type DebtWeakness = {
 
 export interface DebtData {
   id:           string
-  type:         'credit_card' | 'service' | 'loan' | 'overdraft' | 'toka_despensa' | 'toka_fuel' | 'toka_connect'
+  type:         'credit_card' | 'service' | 'loan' | 'overdraft' | 'toka_despensa' | 'toka_fuel' | 'toka_connect' | 'abyss' | 'golem' | 'tickets' | 'cash'
   amount:       number
   daysOverdue:  number
   interestRate?: number

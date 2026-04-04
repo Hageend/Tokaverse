@@ -13,7 +13,7 @@ export interface PlayerCard {
 }
 
 export interface PassiveBonus {
-  type:  'damage' | 'speed' | 'mana' | 'element_boost'
+  type:  'damage' | 'speed' | 'mana' | 'element_boost' | 'mana_regen'
   value: number          // porcentaje: 0.10 = 10%
   element?: Element      // si es element_boost, qué elemento potencia
 }

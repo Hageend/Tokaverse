@@ -1,7 +1,7 @@
 // engine/TurnManager.ts
 // Orquestador central del combate JRPG — integra todos los motores
 
-import { Fighter, Boss, Skill } from '../types/combat'
+import { Fighter, Boss, Skill, BossSkill } from '../types/combat'
 import { Element, ElementEngine, CLASS_ELEMENTS, BOSS_ELEMENTS, ELEMENT_INFO } from '../types/elements'
 import { StatusEngine, StatusEffectRich } from './StatusEngine'
 import { FusionEngine, DEMO_CARDS } from './FusionEngine'
@@ -95,7 +95,7 @@ export class TurnManager {
       turnsWithoutCards: 0,
     }
 
-    return {
+    const initialState: CombatState = {
       player:          enrichedPlayer,
       boss:            enrichedBoss,
       turn:            1,
@@ -125,6 +125,10 @@ export class TurnManager {
       turnsPlayerNotUsedCards:   0,
       lastPlayerAction:          undefined,
     }
+
+    // Predecir primer movimiento del jefe
+    initialState.telegraphMsg = this.predictNextBossMove(initialState).name
+    return initialState
   }
 
   // ─── TURNO DEL JUGADOR ────────────────────────────────────────────────────
@@ -345,7 +349,25 @@ export class TurnManager {
 
     // ── Turno se pasa al jefe ─────────────────────────────────────────────────
     s.phase = 'boss_turn'
+    // Predecir el movimiento que hará el jefe en su turno inmediato para que la UI lo muestre
+    const nextMove = this.predictNextBossMove(s)
+    s.telegraphMsg = nextMove.telegraphMsg || nextMove.name
+    
     return s
+  }
+
+  /**
+   * Predice el siguiente movimiento del jefe basándose en la fase actual.
+   * Útil para la telegrafía en la UI.
+   */
+  private static predictNextBossMove(state: CombatState): BossSkill {
+    let availableSkills = state.boss.skills.filter(sk => sk.usableAtPhase.includes(state.boss.phase))
+    if (availableSkills.length === 0) availableSkills = state.boss.skills
+
+    // Lógica determinista simulada para la predicción (en un motor real esto guardaría el move elegido)
+    // Para simplificar, usaremos un índice basado en el turno actual
+    const idx = (state.turn + state.boss.hp) % availableSkills.length
+    return availableSkills[idx]
   }
 
   // ─── TURNO DEL JEFE (automático) ─────────────────────────────────────────

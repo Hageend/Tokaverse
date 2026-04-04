@@ -108,14 +108,14 @@ export const BOSS_DROPS: Record<string, BossDrop> = {
       stats: { def: 10 }, durability: 15
     },
     random: [
-      { icon: '🧪', pixelArt: 'item_potion', name: 'Poción de HP', rarity: 'uncommon', type: 'consumable', weight: 0.6, description: 'Restaura 30 HP.' },
+      { icon: '🧪', pixelArt: 'item_potion_HP', name: 'Poción de HP', rarity: 'uncommon', type: 'consumable', weight: 0.6, description: 'Restaura +40 HP.', stats: { hp: 40 } },
       { 
-        icon: '🎴', pixelArt: 'item_card', name: 'Carta: Mora Olvidada', rarity: 'uncommon', type: 'card', weight: 0.4, 
-        description: 'Reduce el turno de espera en 1.',
+        icon: '🎴', pixelArt: 'item_card_mana', name: 'Carta: Maná Extra', rarity: 'uncommon', type: 'card', weight: 0.4, 
+        description: 'Restaura +25 MP al inicio del turno.',
         templateId: 'r002', product: 'connect', element: 'dark',
-        passiveBonus: { type: 'speed', value: 0.10 }
+        passiveBonus: { type: 'mana_regen', value: 25 }
       },
-      { icon: '🗡️', name: 'Daga de Retraso', rarity: 'uncommon', type: 'weapon', weight: 0.3, stats: { atk: 8 }, durability: 30, weaponStyle: 'dagger' },
+      { icon: '💍', pixelArt: 'item_ring_shield', name: 'Anillo de Protección', rarity: 'rare', type: 'protection', weight: 0.3, stats: { def: 18 }, durability: 30 },
     ],
   },
   deuda_sombria: {
@@ -128,11 +128,11 @@ export const BOSS_DROPS: Record<string, BossDrop> = {
     random: [
       { 
         icon: '🗡️', pixelArt: 'item_sword', name: 'Daga Oscura', rarity: 'rare', type: 'weapon', weight: 0.35, 
-        description: '+15% daño crítico y +12 ATK.', 
-        stats: { atk: 12 }, durability: 12, weaponStyle: 'dagger'
+        description: '+25% daño crítico y +18 ATK.', 
+        stats: { atk: 18 }, durability: 12, weaponStyle: 'dagger'
       },
-      { icon: '🪄', name: 'Bastón de Embargo', rarity: 'rare', type: 'weapon', weight: 0.25, stats: { atk: 25 }, durability: 10, weaponStyle: 'staff' },
-      { icon: '🧪', pixelArt: 'item_potion', name: 'Elixir Dorado', rarity: 'rare', type: 'consumable', weight: 0.2, description: 'Cura 50 HP y +20 MP.' },
+      { icon: '💍', pixelArt: 'item_ring_mana', name: 'Anillo de Maná', rarity: 'rare', type: 'protection', weight: 0.25, stats: { mana: 30 } },
+      { icon: '🧪', pixelArt: 'item_potion_strong', name: 'Poción Mayor', rarity: 'rare', type: 'consumable', weight: 0.2, description: 'Cura +85 HP de forma crítica.', stats: { hp: 85 } },
     ],
   },
   toka_despensa: {
@@ -179,17 +179,16 @@ export const BOSS_DROPS: Record<string, BossDrop> = {
       passiveBonus: { type: 'damage', value: 0.40, element: 'dark' }
     },
     random: [
-      { icon: '🗡️', pixelArt: 'item_sword', name: 'Espada Bancaria', rarity: 'legendary', type: 'weapon', weight: 0.2, description: 'Daño masivo + efecto veneno. +35 ATK.', stats: { atk: 35 }, durability: 30 },
-      { icon: '🛡️', pixelArt: 'item_shield', name: 'Escudo de Crédito', rarity: 'rare', type: 'protection', weight: 0.35, description: 'Reduce intereses aplicados. +20 DEF.', stats: { def: 20 }, durability: 25 },
-      { icon: '🗡️', pixelArt: 'item_sword', name: 'Espada Bancaria', rarity: 'legendary', type: 'weapon', weight: 0.2, description: 'Daño masivo + efecto veneno. +35 ATK.', stats: { atk: 35 }, durability: 30 },
-      { icon: '🛡️', pixelArt: 'item_shield', name: 'Escudo de Crédito', rarity: 'rare', type: 'protection', weight: 0.35, description: 'Reduce intereses aplicados. +20 DEF.', stats: { def: 20 }, durability: 25 },
-      { icon: '🧪', pixelArt: 'item_potion', name: 'Elixir Premium', rarity: 'rare', type: 'consumable', weight: 0.45, description: 'Cura 80 HP completamente.' },
+      { icon: '🗡️', pixelArt: 'item_sword_diamond', name: 'Mandoble de Diamante', rarity: 'legendary', type: 'weapon', weight: 0.2, description: 'Corte puro. +40 ATK.', stats: { atk: 40 }, durability: 35 },
+      { icon: '🛡️', pixelArt: 'item_shield_elemental', name: 'Escudo de Crédito', rarity: 'rare', type: 'protection', weight: 0.35, description: 'Barrera anti-intereses. +25 DEF.', stats: { def: 25 }, durability: 25 },
+      { icon: '💍', pixelArt: 'item_ring_strong', name: 'Anillo de Poder', rarity: 'rare', type: 'protection', weight: 0.2, stats: { atk: 12, hp: 15 } },
+      { icon: '🧪', pixelArt: 'item_potion_energy', name: 'Poción de Energía', rarity: 'rare', type: 'consumable', weight: 0.45, description: 'Restaura +50 HP y +25 MP.', stats: { hp: 50, mana: 25 } },
     ],
   },
   abyss: {
     guaranteed: { 
       icon: '🗡️', pixelArt: 'item_sword_infernal', name: 'Espada Infernal', rarity: 'legendary', type: 'weapon',
-      description: 'Drena el alma y el dinero del enemigo. +45 ATK.', stats: { atk: 45 }, durability: 20, weaponStyle: 'sword'
+      description: 'Drena el alma y el dinero del enemigo. +55 ATK.', stats: { atk: 55 }, durability: 20, weaponStyle: 'sword'
     },
     random: [
       { icon: '💍', pixelArt: 'item_ring_strong', name: 'Anillo de Poder', rarity: 'rare', type: 'protection', weight: 0.35, stats: { atk: 12, hp: 10 } },
@@ -202,14 +201,14 @@ export const BOSS_DROPS: Record<string, BossDrop> = {
       description: 'Protección contra intereses variables. +25 DEF.', stats: { def: 25 }, durability: 30
     },
     random: [
-      { icon: '💎', pixelArt: 'item_crystal_mana', name: 'Cristal de Maná', rarity: 'uncommon', type: 'consumable', weight: 0.5, description: 'Restaura 50 MP.' },
-      { icon: '🗡️', pixelArt: 'item_sword_diamond', name: 'Espada de Diamante', rarity: 'rare', type: 'weapon', weight: 0.2, stats: { atk: 25 }, durability: 15 },
+      { icon: '💎', pixelArt: 'item_crystal_mana', name: 'Cristal de Maná', rarity: 'rare', type: 'consumable', weight: 0.5, description: 'Restaura +60 MP.', stats: { mana: 60 } },
+      { icon: '🗡️', pixelArt: 'item_sword_diamond', name: 'Espada de Diamante', rarity: 'rare', type: 'weapon', weight: 0.2, stats: { atk: 32 }, durability: 15 },
     ],
   },
   tickets: {
     guaranteed: { 
       icon: '🧭', pixelArt: 'item_compass', name: 'Brújula de Gastos', rarity: 'uncommon', type: 'protection',
-      description: 'No te pierdas en tus comprobantes. +10 DEF.', stats: { def: 10 }, durability: 40
+      description: 'Localiza gastos hormiga. +15 DEF.', stats: { def: 15 }, durability: 40
     },
     random: [
       { icon: '🧪', pixelArt: 'item_potion_mana', name: 'Poción de Maná', rarity: 'common', type: 'consumable', weight: 0.6, description: 'Restaura 25 MP.' },
@@ -219,11 +218,11 @@ export const BOSS_DROPS: Record<string, BossDrop> = {
   cash: {
     guaranteed: { 
       icon: '🕯️', pixelArt: 'item_ritual_incense', name: 'Incienso Ritual', rarity: 'legendary', type: 'consumable',
-      description: 'Limpia tu aura crediticia. Cura 100 HP y elimina estados negativos.'
+      description: 'Cura +100 HP y restaura todo tu MP.', stats: { hp: 100, mana: 80 }
     },
     random: [
-      { icon: '🗡️', pixelArt: 'item_sword_Thunder', name: 'Espada Trueno', rarity: 'legendary', type: 'weapon', weight: 0.2, stats: { atk: 50 }, weaponStyle: 'sword' },
-      { icon: '💍', pixelArt: 'item_ring_mana', name: 'Anillo de Maná', rarity: 'rare', type: 'protection', weight: 0.4, stats: { mana: 30 } },
+      { icon: '🗡️', pixelArt: 'item_sword_Thunder', name: 'Espada Trueno', rarity: 'legendary', type: 'weapon', weight: 0.2, stats: { atk: 65 }, weaponStyle: 'sword' },
+      { icon: '🧪', pixelArt: 'item_potion_strong', name: 'Mega Poción', rarity: 'rare', type: 'consumable', weight: 0.4, description: 'Cura +100 HP.', stats: { hp: 100 } },
     ],
   },
   generic_mob: {
@@ -312,6 +311,7 @@ interface InventoryState {
   expandSlots: (amount: number) => void;
   hasItem:     (name: string) => boolean;
   getEquippedStats: () => ItemStats;
+  useItem:     (id: string) => ItemStats | null;
 }
 
 export const useInventoryStore = create<InventoryState>((set, get) => ({
@@ -411,6 +411,16 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         if (i.stats.mana) stats.mana = (stats.mana || 0) + i.stats.mana;
       }
     });
+    return stats;
+  },
+
+  useItem(id) {
+    const { items } = get();
+    const item = items.find(i => i.id === id);
+    if (!item || item.type !== 'consumable') return null;
+
+    const stats = item.stats || null;
+    set(s => ({ items: s.items.filter(i => i.id !== id) }));
     return stats;
   }
 }));

@@ -4,22 +4,15 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { InventoryModal } from '../../components/quest/InventoryModal';
-import { useInventoryStore, BOSS_DROPS, selectRandomDrop } from '../../store/useInventoryStore';
-import { Audio } from 'expo-av';
-
-
-const AMBIENT_MUSIC = [
-  require('../../assets/music/ambient/Beneath_the_Velvet_Canopy.mp3'),
-  require('../../assets/music/ambient/Clock_With_A_Human_Face.mp3'),
-  require('../../assets/music/ambient/Innocence_Is_The_Sharpest_Blade.mp3'),
-  require('../../assets/music/ambient/The_Stranger_Inside.mp3'),
-  require('../../assets/music/ambient/Toka_Skies.mp3'),
-  require('../../assets/music/ambient/Where_the_Maps_End.mp3'),
-];
-
+import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem, RARITY_COLORS } from '../../store/useInventoryStore';
+import { useAudioPlayer } from 'expo-audio';
+import { AdventurerCodex } from '../../components/quest/AdventurerCodex';
+import { usePlayerStore } from '../../store/usePlayerStore';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { COIN_SPRITES } from '../../data/classSkills';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, Modal, Platform,
+  Alert, Modal, Platform, Dimensions
 } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import Constants from 'expo-constants';
@@ -28,7 +21,6 @@ import Animated, {
   FadeInUp, FadeIn, 
   useSharedValue, useAnimatedStyle, withSpring 
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { CharacterAvatar } from '../../components/CharacterAvatar';
@@ -42,7 +34,14 @@ import { ELEMENT_INFO, BOSS_ELEMENTS, CLASS_ELEMENTS } from '../../types/element
 import type { PlayerCard } from '../../types/fusion';
 import { EnemyMapper } from '../../utils/EnemyMapper';
 import { QUEST_ENEMIES } from '../../store/useCombatStore';
-import { Dimensions } from 'react-native';
+const AMBIENT_MUSIC = [
+  require('../../assets/music/ambient/Beneath_the_Velvet_Canopy.mp3'),
+  require('../../assets/music/ambient/Clock_With_A_Human_Face.mp3'),
+  require('../../assets/music/ambient/Innocence_Is_The_Sharpest_Blade.mp3'),
+  require('../../assets/music/ambient/The_Stranger_Inside.mp3'),
+  require('../../assets/music/ambient/Toka_Skies.mp3'),
+  require('../../assets/music/ambient/Where_the_Maps_End.mp3'),
+];
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -58,8 +57,16 @@ const JRPG_CLASSES = [
   { id: 'kitsune',  name: 'Kitsune',    subtitle: '(Espiritual)', stat: 'Misticismo',  bonus: 'Veneno + curación automática', sprite: CHAR_SPRITES.kitsune },
   { id: 'thief',    name: 'Gōtō',       subtitle: '(Ladrón)',     stat: 'Sigilo',      bonus: '+50% Drop Rate',               sprite: CHAR_SPRITES.thief   },
   { id: 'magedark', name: 'Ankoku',     subtitle: '(Mago Oscuro)',stat: 'Caos',        bonus: '+25% Daño Mágico',             sprite: CHAR_SPRITES.magedark},
-  { id: 'dog',      name: 'Inu',        subtitle: '(Perro)',      stat: 'Lealtad',     bonus: '+15% Defensa Base',            sprite: CHAR_SPRITES.dog, locked: true },
-  { id: 'cat',      name: 'Neko',       subtitle: '(Gato)',       stat: 'Suerte',      bonus: '+20% Evasión',                 sprite: CHAR_SPRITES.cat, locked: true },
+  { id: 'elf',      name: 'Erufu',      subtitle: '(Explorador)', stat: 'Naturaleza',  bonus: '+15% Velocidad Base',          sprite: CHAR_SPRITES.elf },
+  { id: 'maid',     name: 'Meido',      subtitle: '(Sirvienta)',  stat: 'Orden',       bonus: 'Cura +10 HP tras cada turno',  sprite: CHAR_SPRITES.maid },
+  { id: 'mermaid',  name: 'Ningyo',     subtitle: '(Sirena)',     stat: 'Flujo',       bonus: '+25% Recarga Maná',            sprite: CHAR_SPRITES.mermaid },
+  { id: 'witch',    name: 'Majo',       subtitle: '(Bruja)',      stat: 'Alquimia',    bonus: '+20% Daño de Estado',          sprite: CHAR_SPRITES.witch },
+  { id: 'santa',    name: 'Kurisumasu', subtitle: '(San Nicolás)',stat: 'Regalo',      bonus: '+10% Loot Rate Extra',         sprite: CHAR_SPRITES.santa },
+  { id: 'leona',    name: 'Reona',      subtitle: '(Guerrera)',   stat: 'Fuerza',      bonus: '+15% Crítico',                 sprite: CHAR_SPRITES.leona },
+  { id: 'knigh_girl', name: 'Valquiria', subtitle: '(Paladín)',   stat: 'Luz',         bonus: '+30% HP Máximo',               sprite: CHAR_SPRITES.knigh_girl },
+  { id: 'knigh_red',  name: 'Búfalo',    subtitle: '(Cab. Rojo)', stat: 'Fuego',       bonus: '+20% Daño Físico',             sprite: CHAR_SPRITES.knigh_red },
+  { id: 'dog',      name: 'Inu',        subtitle: '(Perro)',      stat: 'Lealtad',     bonus: '+15% Defensa Base',            sprite: CHAR_SPRITES.dog },
+  { id: 'cat',      name: 'Neko',       subtitle: '(Gato)',       stat: 'Suerte',      bonus: '+20% Evasión',                 sprite: CHAR_SPRITES.cat },
   { id: 'fox',      name: 'Kitsune-bi', subtitle: '(Zorro)',      stat: 'Espíritu',    bonus: '+15% Regeneración Maná',       sprite: CHAR_SPRITES.fox },
 ] as const;
 
@@ -81,14 +88,14 @@ const DAILIES = [
 
 // ─── Jefes disponibles ───────────────────────────────────────────────────
 const DEMO_BOSSES = [
-  { label: 'El Carrito Vacío',        icon: '🛒', pixelIcon: 'item_chest', type: 'toka_despensa' as const, amount: 2500,  daysOverdue: 0,  difficulty: 'Fácil',    diffColor: '#22C55E' },
-  { label: 'El Tanque Vacío',         icon: '⛽', type: 'toka_fuel'     as const, amount: 1500,  daysOverdue: 5,  difficulty: 'Normal',   diffColor: '#F59E0B' },
-  { label: 'El Gasto Sin Comprobar',  icon: '📑', type: 'toka_connect'  as const, amount: 8000,  daysOverdue: 15, difficulty: 'Difícil',  diffColor: '#EF4444', interestRate: 10 },
-  { label: 'El Abismo de Deuda',      icon: '🕳️', pixelIcon: 'item_card', type: 'abyss' as const,         amount: 15000, daysOverdue: 30, difficulty: '🌋 Épico', diffColor: '#9333ea' },
-  { label: 'Golem de Facturas',       icon: '🧱', type: 'golem' as const,         amount: 12000, daysOverdue: 20, difficulty: 'Difícil',  diffColor: '#475569' },
-  { label: 'Lluvia de Tickets',       icon: '🌧️', type: 'tickets' as const,       amount: 3000,  daysOverdue: 10, difficulty: 'Normal',   diffColor: '#2563eb' },
-  { label: 'Monstruo de Efectivo',    icon: '💵', type: 'cash' as const,          amount: 25000, daysOverdue: 60, difficulty: '👹 Infernal', diffColor: '#16a34a' },
-  { label: 'Tarjeta Maldita',         icon: '🃏', pixelIcon: 'item_card', type: 'credit_card'   as const, amount: 5000,  daysOverdue: 45, difficulty: '🌋 Épico', diffColor: '#FF6B35', interestRate: 36 },
+  { label: 'El Carrito Vacío',        icon: '🛒', pixelIcon: 'item_chest', sprite: require('../../assets/images/bosses/boss_bill.png'), type: 'toka_despensa' as const, amount: 2500,  daysOverdue: 0,  difficulty: 'Fácil',    diffColor: '#22C55E' },
+  { label: 'El Tanque Vacío',         icon: '⛽', sprite: require('../../assets/images/bosses/rpg_boss_documents.png'), type: 'toka_fuel'     as const, amount: 1500,  daysOverdue: 5,  difficulty: 'Normal',   diffColor: '#F59E0B' },
+  { label: 'El Gasto Sin Comprobar',  icon: '📑', sprite: require('../../assets/images/bosses/rpg_boss_documents.png'), type: 'toka_connect'  as const, amount: 8000,  daysOverdue: 15, difficulty: 'Difícil',  diffColor: '#EF4444', interestRate: 10 },
+  { label: 'El Abismo de Deuda',      icon: '🕳️', pixelIcon: 'item_card', sprite: require('../../assets/images/bosses/boss_abyss.png'), type: 'abyss' as const,         amount: 15000, daysOverdue: 30, difficulty: '🌋 Épico', diffColor: '#9333ea' },
+  { label: 'Golem de Facturas',       icon: '🧱', sprite: require('../../assets/images/bosses/boss_golem.png'), type: 'golem' as const,         amount: 12000, daysOverdue: 20, difficulty: 'Difícil',  diffColor: '#475569' },
+  { label: 'Lluvia de Tickets',       icon: '🌧️', sprite: require('../../assets/images/bosses/boss_tickets.png'), type: 'tickets' as const,       amount: 3000,  daysOverdue: 10, difficulty: 'Normal',   diffColor: '#2563eb' },
+  { label: 'Monstruo de Efectivo',    icon: '💵', sprite: require('../../assets/images/bosses/boss_cash.png'), type: 'cash' as const,          amount: 25000, daysOverdue: 60, difficulty: '👹 Infernal', diffColor: '#16a34a' },
+  { label: 'Tarjeta Maldita',         icon: '🃏', pixelIcon: 'item_card', sprite: require('../../assets/images/bosses/boss_credit_card.png'), type: 'credit_card'   as const, amount: 5000,  daysOverdue: 45, difficulty: '🌋 Épico', diffColor: '#FF6B35', interestRate: 36 },
 ];
 
 // ─── Mapeo de Assets Pixel Art ────────────────────────────────────────────────
@@ -121,46 +128,25 @@ export default function QuestsScreen() {
   const insets = useSafeAreaInsets();
 
   // ── Audio ──────────────────────────────────────────────────────────────
-  const [ambientSound, setAmbientSound] = useState<Audio.Sound | null>(null);
   const [volume, setVolume] = useState(0.7);
   const [showVolumePanel, setShowVolumePanel] = useState(false);
-  const [trackName, setTrackName] = useState('');
+  const [trackName, setTrackName] = useState('Música Ambiente');
+
+  // useAudioPlayer para música ambiental
+  const ambientSound = useAudioPlayer(AMBIENT_MUSIC[Math.floor(Math.random() * AMBIENT_MUSIC.length)]);
 
   useEffect(() => {
-    let isMounted = true;
-    async function playAmbient() {
-      try {
-        const idx = Math.floor(Math.random() * AMBIENT_MUSIC.length);
-        const names = ['Beneath the Velvet Canopy', 'Where the Maps End'];
-        const track = AMBIENT_MUSIC[idx];
-        setTrackName(names[idx] ?? 'Música Ambiente');
-        const { sound } = await Audio.Sound.createAsync(track, { volume, isLooping: true });
-        if (isMounted) {
-          setAmbientSound(sound);
-          await sound.playAsync();
-        } else {
-          await sound.unloadAsync();
-        }
-      } catch (e) {
-        console.warn('[Quests] Audio init error:', e);
-      }
+    if (ambientSound) {
+      ambientSound.loop = true;
+      ambientSound.volume = volume;
+      ambientSound.play();
     }
-    playAmbient();
-    return () => { isMounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ambientSound]);
 
   // Sincronizar volumen
   useEffect(() => {
-    ambientSound?.setVolumeAsync(volume).catch(() => {});
+    if (ambientSound) ambientSound.volume = volume;
   }, [volume, ambientSound]);
-
-  // Cleanup al desmontar
-  useEffect(() => {
-    return () => {
-      ambientSound?.stopAsync().catch(() => {}).then(() => ambientSound?.unloadAsync().catch(() => {}));
-    };
-  }, [ambientSound]);
 
   // ── Backend / Socket ───────────────────────────────────────────────────
   const [userProfile, setUserProfile] = useState<{ id: string; xp: number; level: number } | null>(null);
@@ -218,11 +204,14 @@ export default function QuestsScreen() {
   const [isTakingDamage, setDamage]    = useState(false);
   const [isAttacking,    setAttacking] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
-
+  const [showShop, setShowShop]           = useState(false);
 
   const { addItem: addInventoryItem, items: inventoryItems, maxSlots } = useInventoryStore();
+  const { starCoins, unlockedClasses, setCharClass: setPlayerCharClass } = usePlayerStore();
 
-  const currentClass = JRPG_CLASSES[classIndex];
+  // Filtrar solo las clases que el usuario ha desbloqueado
+  const availableClasses = JRPG_CLASSES.filter(cls => unlockedClasses.includes(cls.id));
+  const currentClass = availableClasses[classIndex % availableClasses.length] || JRPG_CLASSES[0];
 
   // ─── ANIMACIONES 60FPS (Barras) ─────────────────────────────────────────
   const hpProgress   = useSharedValue(hp / hpMax);
@@ -304,13 +293,30 @@ export default function QuestsScreen() {
     // Penalización base por derrota en combate
     takeDamage(20); 
   };
+  
+  const handleUseItem = (itemId: string) => {
+    const { useItem } = useInventoryStore.getState();
+    const stats = useItem(itemId);
+    if (!stats) return;
+
+    if (stats.hp) {
+      setHp(prev => Math.min(hpMax, prev + stats.hp!));
+    }
+    if (stats.mana) {
+      // Nota: El mana no tiene estado local de setMana actualmente (solo mana constante)
+      // Pero si quisiéramos que fuera dinámico, aquí lo actualizaríamos.
+      console.log(`[Item] Restaurado ${stats.mana} MP`);
+    }
+    
+    Alert.alert('✨ Objeto Usado', 'Has recuperado vitalidad.');
+  };
 
   // ── Sincronizar audio con combate ───────────────────────────────────────
   useEffect(() => {
     if (inCombat) {
-      ambientSound?.pauseAsync().catch(() => {});
+      ambientSound?.pause();
     } else {
-      ambientSound?.playAsync().catch(() => {});
+      ambientSound?.play();
     }
   }, [inCombat, ambientSound]);
 
@@ -376,6 +382,16 @@ export default function QuestsScreen() {
             <Text style={S.inventoryBtnTxt}>{inventoryItems.length}/{maxSlots}</Text>
           </TouchableOpacity>
 
+          {/* Botón de Códice (Star Coins) */}
+          <TouchableOpacity
+            style={[S.inventoryBtn, { borderColor: '#854d0e44' }]}
+            onPress={() => setShowShop(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Image source={COIN_SPRITES.star} style={{ width: 14, height: 14 }} />
+            <Text style={[S.inventoryBtnTxt, { color: '#fbbf24' }]}>{starCoins}</Text>
+          </TouchableOpacity>
+
           {/* Botón de volumen mejorado */}
           <TouchableOpacity
             style={S.volBtn}
@@ -399,8 +415,15 @@ export default function QuestsScreen() {
         </View>
       </View>
 
+      {/* ── CÓDICE DE AVENTUREROS ────────────────────────────────────────── */}
+      <AdventurerCodex visible={showShop} onClose={() => setShowShop(false)} />
+
       {/* ── Modal de Inventario ─────────────────────────────────────────── */}
-      <InventoryModal visible={showInventory} onClose={() => setShowInventory(false)} />
+      <InventoryModal 
+        visible={showInventory} 
+        onClose={() => setShowInventory(false)} 
+        onUseItem={handleUseItem}
+      />
 
       {/* Panel de volumen expandible */}
       {showVolumePanel && (
@@ -480,10 +503,10 @@ export default function QuestsScreen() {
                         activeOpacity={0.75}
                       >
                         <View style={S.bossCardTop}>
-                          {(b as any).pixelIcon ? (
+                          {b.sprite ? (
                             <Image 
-                              source={PIXEL_ART_ASSETS[(b as any).pixelIcon]} 
-                              style={{ width: 28, height: 28, marginRight: 10 }} 
+                              source={b.sprite} 
+                              style={{ width: 44, height: 44, marginRight: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)' }} 
                               contentFit="contain" 
                             />
                           ) : (
@@ -521,7 +544,15 @@ export default function QuestsScreen() {
                       activeOpacity={0.75}
                     >
                       <View style={S.bossCardTop}>
-                        <Text style={S.bossCardIcon}>{e.emoji}</Text>
+                        {e.sprite ? (
+                          <Image 
+                            source={e.sprite} 
+                            style={{ width: 44, height: 44, marginRight: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)' }} 
+                            contentFit="contain" 
+                          />
+                        ) : (
+                          <Text style={S.bossCardIcon}>{e.emoji}</Text>
+                        )}
                         <View style={{ flex: 1 }}>
                           <Text style={S.bossCardName}>{e.name}</Text>
                           <Text style={S.bossCardSub}>Enemigo de práctica · {e.xpReward} XP</Text>
@@ -559,55 +590,47 @@ export default function QuestsScreen() {
                 <Ionicons name="close-circle" size={28} color="rgba(255,255,255,0.6)" />
               </TouchableOpacity>
             </View>
-            <Text style={S.modalSub}>Selecciona tu Camino Financiero:</Text>
+            <Text style={S.modalSub}>Selecciona tu Aventurero (Solo desbloqueados):</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 16 }}>
-              {JRPG_CLASSES.map((cls, i) => {
-                  const selected = classIndex === i;
-                  const locked = (cls as any).locked;
+              {availableClasses.map((cls) => {
+                  const selectedIdx = JRPG_CLASSES.findIndex(c => c.id === cls.id);
+                  const isActive = classIndex === selectedIdx;
                   return (
                     <TouchableOpacity
                       key={cls.id}
                       style={[
                         S.classCard, 
-                        selected && S.classCardActive,
-                        locked && S.classCardLocked
+                        isActive && S.classCardActive,
                       ]}
                       onPress={() => {
-                        if (locked) {
-                          Alert.alert('🛡️ Clase Bloqueada', 'Esta clase se desbloquea al alcanzar el Nivel 10 o mediante misiones especiales.');
-                          return;
+                        if (selectedIdx !== -1) {
+                          setClassIndex(selectedIdx);
+                          setPlayerCharClass(cls.id as any);
+                          setShowStatus(false);
                         }
-                        setClassIndex(i);
                       }}
-                      activeOpacity={locked ? 1 : 0.8}
+                      activeOpacity={0.8}
                     >
-                      {selected && (
+                      {isActive && (
                         <View style={S.activeTag}>
                           <Text style={S.activeTagTxt}>ACTIVO</Text>
                         </View>
                       )}
                       
-                      {locked && (
-                        <View style={S.lockBadge}>
-                          <Ionicons name="lock-closed" size={16} color="#FFF" />
-                        </View>
-                      )}
-
                       <Image
                         source={typeof cls.sprite === 'number' ? cls.sprite : { uri: cls.sprite }}
                         style={[
                           S.classImg, 
                           Platform.OS === 'web' && { imageRendering: 'pixelated' } as any,
-                          locked && { opacity: 0.3, tintColor: '#666' }
                         ]}
                         contentFit="contain"
                         cachePolicy="memory-disk"
                       />
-                      <Text style={[S.className, locked && { color: '#666' }]}>{cls.name}</Text>
+                      <Text style={S.className}>{cls.name}</Text>
                       <Text style={S.classSubtitle}>{cls.subtitle}</Text>
                       <Text style={S.classStat}>Stat: {cls.stat}</Text>
-                      <View style={[S.bonusBadge, locked && { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                        <Text style={[S.bonusTxt, locked && { color: '#444' }]}>{cls.bonus}</Text>
+                      <View style={S.bonusBadge}>
+                        <Text style={S.bonusTxt}>{cls.bonus}</Text>
                       </View>
                     </TouchableOpacity>
                   );
@@ -658,10 +681,15 @@ export default function QuestsScreen() {
             </View>
           </View>
 
-          {/* Multiplicador */}
+          {/* Renkei x Multiplier — MEJORA UX */}
           <View style={S.mulRow}>
-            <Ionicons name="flame" size={12} color="#F59E0B" />
-            <Text style={S.mulTxt}>Renkei x{multiplier}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+              <Ionicons name="flame" size={14} color="#F59E0B" />
+              <Text style={S.mulTxt}>Renkei x{multiplier}</Text>
+              <View style={S.renkeiTrack}>
+                <View style={[S.renkeiFill, { width: `${(defenseStreak / 10) * 100}%` }]} />
+              </View>
+            </View>
             {classElemInfo && (
               <View style={[S.elemTag, { backgroundColor: classElemInfo.color + '1A', borderColor: classElemInfo.color + '44' }]}>
                 <Text style={[S.elemTagTxt, { color: classElemInfo.color }]}>{classElemInfo.emoji} {classElemInfo.label}</Text>
@@ -686,7 +714,7 @@ export default function QuestsScreen() {
                   <View style={S.barHdr}>
                     <Text style={[S.barLbl, { color: b.color }]}>{b.label}</Text>
                     <Text style={S.barVal}>
-                      {b.label === 'XP' ? `${b.cur2}/${xpMax}` : `${b.cur}/${b.max}`}
+                      {b.label === 'XP' ? `${b.cur2} / ${xpMax} (+${Math.round(multiplier * 100 - 100)}% Bonus)` : `${b.cur}/${b.max}`}
                     </Text>
                   </View>
                   <View style={S.barBg}>
@@ -756,7 +784,7 @@ export default function QuestsScreen() {
         {/* ── Lista ─────────────────────────────────────────────────── */}
         <View style={S.list}>
 
-          {/* Hábitos */}
+          {/* Hábitos — MEJORADOS (Compactos + ✓/✕) */}
           {activeTab === 'HABITOS' && habits.map((h, i) => (
             <Animated.View entering={FadeInUp.delay(i * 70)} key={h.id}>
               <View style={S.card}>
@@ -765,7 +793,7 @@ export default function QuestsScreen() {
                   {(h as any).pixelIcon ? (
                     <Image 
                       source={PIXEL_ART_ASSETS[(h as any).pixelIcon]} 
-                      style={{ width: 24, height: 24, marginRight: 12 }} 
+                      style={{ width: 22, height: 22, marginRight: 10 }} 
                       contentFit="contain" 
                     />
                   ) : (
@@ -774,24 +802,22 @@ export default function QuestsScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={S.cardTitle}>{h.title}</Text>
                     <Text style={[S.cardSub, { color: h.type === 'positive' ? '#10B981' : '#EF4444' }]}>
-                      {h.type === 'positive' ? `+${h.xp} EXP` : `-${h.hpPenalty} HP`}
+                      {h.type === 'positive' ? `+${h.xp} XP · x${multiplier} = +${Math.floor(h.xp * multiplier)} XP` : `-${h.hpPenalty} HP penalización`}
                     </Text>
                   </View>
                 </View>
                 <TouchableOpacity
-                  style={[S.cardActionBtn, { borderColor: h.type === 'positive' ? '#10B98155' : '#EF444455' }]}
+                  style={[S.compactAction, { borderLeftColor: h.type === 'positive' ? '#10B98133' : '#EF444433' }]}
                   onPress={() => h.type === 'positive' ? gainXp(h.xp) : takeDamage(h.hpPenalty!)}
-                  activeOpacity={0.75}
-                  accessibilityLabel={h.type === 'positive' ? 'Marcar hábito como hecho' : 'Aplicar penalización'}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name={h.type === 'positive' ? 'checkmark' : 'remove'}
-                    size={18}
-                    color={h.type === 'positive' ? '#10B981' : '#EF4444'}
-                  />
-                  <Text style={[S.cardActionTxt, { color: h.type === 'positive' ? '#10B981' : '#EF4444' }]}>
-                    {h.type === 'positive' ? '¡Hecho!' : 'Castigar'}
-                  </Text>
+                  <View style={[S.circleBtn, { backgroundColor: h.type === 'positive' ? '#10B98115' : '#EF444415' }]}>
+                    <Ionicons
+                      name={h.type === 'positive' ? 'checkmark' : 'close'}
+                      size={18}
+                      color={h.type === 'positive' ? '#10B981' : '#EF4444'}
+                    />
+                  </View>
                 </TouchableOpacity>
               </View>
             </Animated.View>
@@ -806,7 +832,7 @@ export default function QuestsScreen() {
                   {(d as any).pixelIcon ? (
                     <Image 
                       source={PIXEL_ART_ASSETS[(d as any).pixelIcon]} 
-                      style={{ width: 24, height: 24, marginRight: 12 }} 
+                      style={{ width: 22, height: 22, marginRight: 10 }} 
                       contentFit="contain" 
                     />
                   ) : (
@@ -814,23 +840,26 @@ export default function QuestsScreen() {
                   )}
                   <View style={{ flex: 1 }}>
                     <Text style={[S.cardTitle, d.completed && S.cardTitleDone]}>{d.title}</Text>
-                    <Text style={[S.cardSub, { color: '#F59E0B' }]}>+{d.xp} XP · -{d.hpPenalty} HP si fallas</Text>
+                    <Text style={[S.cardSub, { color: '#F59E0B' }]}>
+                      +{d.xp} XP · x{multiplier} = +{Math.floor(d.xp * multiplier)} XP
+                    </Text>
                   </View>
                 </View>
                 {!d.completed ? (
                   <TouchableOpacity
-                    style={S.checkBtn}
+                    style={[S.compactAction, { borderLeftColor: '#F59E0B33' }]}
                     onPress={() => {
                       setDailies(ds => ds.map(x => x.id === d.id ? { ...x, completed: true } : x));
                       gainXp(d.xp);
                     }}
-                    activeOpacity={0.8}
-                    accessibilityLabel="Marcar daily como completado"
+                    activeOpacity={0.7}
                   >
-                    <Ionicons name="checkmark" size={16} color="#000" />
+                    <View style={[S.circleBtn, { backgroundColor: '#F59E0B15' }]}>
+                      <Ionicons name="checkmark" size={18} color="#F59E0B" />
+                    </View>
                   </TouchableOpacity>
                 ) : (
-                  <View style={S.doneIcon}>
+                  <View style={S.compactAction}>
                     <Ionicons name="checkmark-circle" size={24} color="#10B981" />
                   </View>
                 )}
@@ -1024,6 +1053,8 @@ const S = StyleSheet.create({
   streakTxt:    { color: Colors.tertiary, fontSize: 10, fontWeight: '800' },
   mulRow:       { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   mulTxt:       { color: '#F59E0B', fontSize: 12, fontWeight: '800' },
+  renkeiTrack: { flex: 1, height: 4, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 2, marginLeft: 4, overflow: 'hidden' },
+  renkeiFill:  { height: '100%', backgroundColor: '#F59E0B', borderRadius: 2 },
   elemTag:      { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
   elemTagTxt:   { fontSize: 10, fontWeight: '700' },
   avatarRow:    { flexDirection: 'row', alignItems: 'center' },
@@ -1086,6 +1117,21 @@ const S = StyleSheet.create({
     borderWidth: 1,
   },
   cardActionTxt: { fontSize: 9, fontWeight: '700', marginTop: 2 },
+  compactAction: {
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: 1,
+  },
+  circleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
   checkBtn: {
     position: 'absolute', right: 14, top: '50%',
     marginTop: -18,

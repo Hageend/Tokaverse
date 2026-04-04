@@ -11,11 +11,15 @@ interface PlayerState {
   nextLevelXp: number;
   baseMaxHp:   number;
   baseMaxMana: number;
-  charClass:   'warrior' | 'archer' | 'mage' | 'rogue' | 'banker' | 'kitsune';
+  charClass:   'warrior' | 'archer' | 'mage' | 'rogue' | 'banker' | 'kitsune' | 'thief' | 'knight' | 'magedark' | 'dog' | 'cat' | 'fox';
+  starCoins:   number;         // Moneda de la tienda (Estrella)
+  unlockedClasses: string[];   // Clases desbloqueadas
   
   // Acciones
   addXp:       (amount: number) => { leveledUp: boolean; newLevel: number };
-  setCharClass: (cls: 'warrior' | 'archer' | 'mage' | 'rogue' | 'banker' | 'kitsune') => void;
+  addStarCoins:(amount: number) => void;
+  unlockClass: (cls: string) => boolean;
+  setCharClass: (cls: any) => void;
   resetPlayer:  () => void;
 }
 
@@ -31,6 +35,8 @@ export const usePlayerStore = create<PlayerState>()(
       baseMaxHp:   100,
       baseMaxMana: 60,
       charClass:   'warrior', // Default
+      starCoins:   1000,      // 1000 Monedas iniciales
+      unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief'], // 3 M / 3 F default
 
       addXp: (amount: number) => {
         const s = get();
@@ -65,10 +71,20 @@ export const usePlayerStore = create<PlayerState>()(
         return { leveledUp: leveled, newLevel };
       },
 
+      addStarCoins: (amount) => set(s => ({ starCoins: s.starCoins + amount })),
+
+      unlockClass: (cls) => {
+        const { unlockedClasses } = get();
+        if (unlockedClasses.includes(cls)) return false;
+        set(s => ({ unlockedClasses: [...s.unlockedClasses, cls] }));
+        return true;
+      },
+
       setCharClass: (cls) => set({ charClass: cls }),
 
       resetPlayer: () => set({
-        level: 1, xp: 0, nextLevelXp: XP_BASE, baseMaxHp: 100, baseMaxMana: 60, charClass: 'warrior'
+        level: 1, xp: 0, nextLevelXp: XP_BASE, baseMaxHp: 100, baseMaxMana: 60, charClass: 'warrior',
+        starCoins: 1000, unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief']
       }),
     }),
     {

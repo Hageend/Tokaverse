@@ -195,7 +195,7 @@ const slotStyles = StyleSheet.create({
 });
 
 // ─── Panel de detalle del ítem ────────────────────────────────────────────────
-function ItemDetail({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
+function ItemDetail({ item, onClose, onUse }: { item: InventoryItem; onClose: () => void; onUse?: (id: string) => void }) {
   const rarityColor = RARITY_COLORS[item.rarity];
   const { equipItem } = useInventoryStore();
 
@@ -250,12 +250,6 @@ function ItemDetail({ item, onClose }: { item: InventoryItem; onClose: () => voi
       )}
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-        <View style={[detStyles.typeBadge, { borderColor: rarityColor + '33' }]}>
-          <Text style={[detStyles.typeText, { color: rarityColor }]}>
-            {item.type === 'card' ? '🃏 Carta' : item.type === 'weapon' ? '⚔️ Arma' : item.type === 'protection' ? '🛡️ Protección' : item.type === 'consumable' ? '🧪 Consumible' : '🎰 Spin'}
-          </Text>
-        </View>
-
         {isEquippable && (
           <TouchableOpacity 
             style={[detStyles.equipBtn, item.isEquipped && detStyles.unequipBtn]} 
@@ -264,6 +258,15 @@ function ItemDetail({ item, onClose }: { item: InventoryItem; onClose: () => voi
             <Text style={detStyles.equipBtnTxt}>
               {item.isEquipped ? 'DESEQUIPAR' : 'EQUIPAR'}
             </Text>
+          </TouchableOpacity>
+        )}
+        
+        {item.type === 'consumable' && onUse && (
+          <TouchableOpacity 
+            style={[detStyles.equipBtn, { backgroundColor: '#10b981' }]} 
+            onPress={() => onUse(item.id)}
+          >
+            <Text style={detStyles.equipBtnTxt}>USAR</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -299,9 +302,10 @@ const detStyles = StyleSheet.create({
 interface InventoryModalProps {
   visible:  boolean;
   onClose:  () => void;
+  onUseItem?: (id: string) => void;
 }
 
-export function InventoryModal({ visible, onClose }: InventoryModalProps) {
+export function InventoryModal({ visible, onClose, onUseItem }: InventoryModalProps) {
   const insets = useSafeAreaInsets();
   const { items, maxSlots } = useInventoryStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -382,7 +386,14 @@ export function InventoryModal({ visible, onClose }: InventoryModalProps) {
 
           {/* Item detail panel */}
           {selectedItem && (
-            <ItemDetail item={selectedItem} onClose={() => setSelectedId(null)} />
+            <ItemDetail 
+              item={selectedItem} 
+              onClose={() => setSelectedId(null)} 
+              onUse={(id) => {
+                onUseItem?.(id);
+                setSelectedId(null);
+              }}
+            />
           )}
 
           {/* Slot expansion banner */}

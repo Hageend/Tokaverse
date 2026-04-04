@@ -39,6 +39,7 @@ export interface SimpleEnemy {
   id:          string;
   name:        string;
   emoji:       string;
+  sprite?:     any;      // Imagen pixel art del jefe
   hp:          number;
   maxHp:       number;
   attack:      number;
@@ -49,10 +50,62 @@ export interface SimpleEnemy {
 }
 
 export const QUEST_ENEMIES: SimpleEnemy[] = [
-  { id: 'e_gasto',    name: 'Gasto Impulsivo',    emoji: '🎰', hp: 80,  maxHp: 80,  attack: 12, defense: 4,  xpReward: 80,  bossType: 'toka_despensa', maxPhases: 2 },
-  { id: 'e_mora',     name: 'Mora Acumulada',      emoji: '💸', hp: 120, maxHp: 120, attack: 18, defense: 6,  xpReward: 150, bossType: 'jefe_de_mora', maxPhases: 3 },
-  { id: 'e_deuda',    name: 'Deuda Sombría',       emoji: '👾', hp: 200, maxHp: 200, attack: 25, defense: 10, xpReward: 250, bossType: 'deuda_sombria', maxPhases: 4 },
-  { id: 'e_tarjeta',  name: 'Tarjeta Maldita',     emoji: '🃏', hp: 300, maxHp: 300, attack: 35, defense: 15, xpReward: 400, bossType: 'credit_card', maxPhases: 4 },
+  { 
+    id: 'e_gasto',    
+    name: 'Gasto Impulsivo',    
+    emoji: '🎰', 
+    sprite: require('../assets/images/bosses/boss_bill.png'),
+    hp: 80,  maxHp: 80,  attack: 12, defense: 4,  xpReward: 80,  bossType: 'toka_despensa', maxPhases: 2 
+  },
+  { 
+    id: 'e_mora',     
+    name: 'Mora Acumulada',      
+    emoji: '💸', 
+    sprite: require('../assets/images/bosses/boss_loan.png'),
+    hp: 120, maxHp: 120, attack: 18, defense: 6,  xpReward: 150, bossType: 'jefe_de_mora', maxPhases: 3 
+  },
+  { 
+    id: 'e_deuda',    
+    name: 'Deuda Sombría',       
+    emoji: '👾', 
+    sprite: require('../assets/images/bosses/boss_overdraft.png'),
+    hp: 200, maxHp: 200, attack: 25, defense: 10, xpReward: 250, bossType: 'deuda_sombria', maxPhases: 4 
+  },
+  { 
+    id: 'e_tarjeta',  
+    name: 'Tarjeta Maldita',     
+    emoji: '🃏', 
+    sprite: require('../assets/images/bosses/boss_credit_card.png'),
+    hp: 300, maxHp: 300, attack: 35, defense: 15, xpReward: 400, bossType: 'credit_card', maxPhases: 4 
+  },
+  { 
+    id: 'e_abismo',  
+    name: 'Abismo de Deuda',     
+    emoji: '🕳️', 
+    sprite: require('../assets/images/bosses/boss_abyss.png'),
+    hp: 500, maxHp: 500, attack: 45, defense: 20, xpReward: 600, bossType: 'abyss', maxPhases: 4 
+  },
+  { 
+    id: 'e_golem',  
+    name: 'Golem de Facturas',     
+    emoji: '🧱', 
+    sprite: require('../assets/images/bosses/boss_golem.png'),
+    hp: 450, maxHp: 450, attack: 40, defense: 30, xpReward: 550, bossType: 'golem', maxPhases: 4 
+  },
+  { 
+    id: 'e_tickets',  
+    name: 'Lluvia de Tickets',     
+    emoji: '🌧️', 
+    sprite: require('../assets/images/bosses/boss_tickets.png'),
+    hp: 250, maxHp: 250, attack: 28, defense: 12, xpReward: 300, bossType: 'tickets', maxPhases: 3 
+  },
+  { 
+    id: 'e_cash',  
+    name: 'Monstruo de Efectivo',     
+    emoji: '💵', 
+    sprite: require('../assets/images/bosses/boss_cash.png'),
+    hp: 700, maxHp: 700, attack: 60, defense: 25, xpReward: 1000, bossType: 'cash', maxPhases: 4 
+  },
 ];
 
 export const LOG_COLORS: Record<LogType, string> = {

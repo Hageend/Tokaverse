@@ -60,6 +60,10 @@ export class BossEngine {
       toka_despensa: '🛒 El Carrito Vacío',
       toka_fuel:     '⛽ El Tanque Vacío',
       toka_connect:  '📑 El Gasto Sin Comprobar',
+      abyss:         '🌌 El Abismo de Deuda',
+      golem:         '🗿 El Golem de Facturas',
+      tickets:       '🌧️ La Lluvia de Tickets',
+      cash:          '💰 El Monstruo de Efectivo',
     }
     return names[type]
   }
@@ -93,6 +97,22 @@ export class BossEngine {
       toka_connect: [
         { action: 'payment_made',     multiplier: 1.8 },
         { action: 'early_payment',    multiplier: 3.0 },
+      ],
+      abyss: [
+        { action: 'savings_deposit',  multiplier: 2.8 },
+        { action: 'goal_completed',   multiplier: 2.2 },
+      ],
+      golem: [
+        { action: 'payment_made',     multiplier: 2.0 },
+        { action: 'budget_respected', multiplier: 2.5 },
+      ],
+      tickets: [
+        { action: 'early_payment',    multiplier: 2.8 },
+        { action: 'payment_made',     multiplier: 1.5 },
+      ],
+      cash: [
+        { action: 'savings_deposit',  multiplier: 2.5 },
+        { action: 'budget_respected', multiplier: 2.0 },
       ],
     }
     return map[type]
@@ -163,6 +183,30 @@ export class BossEngine {
         { id: 'audit_panic',    name: '🚨 Pánico de Auditoría', damage: 50, effect: stunEffect, usableAtPhase: [2,3,4], element: 'thunder' },
         { id: 'budget_freeze',  name: '❄️ Presupuesto Congelado', damage: 85, effect: { type: 'frozen', duration: 2 }, usableAtPhase: [3,4], element: 'ice' },
         { id: 'total_audit',    name: '🏛️ Auditoría Total',      damage: 110, effect: cursedEffect, usableAtPhase: [4], element: 'thunder' },
+      ],
+      abyss: [
+        { id: 'shadow_claws', name: '🌑 Garras del Vacío', damage: 35, usableAtPhase: [1,2,3,4], element: 'dark' },
+        { id: 'mana_leech',   name: '🌀 Succión de Maná', damage: 50, usableAtPhase: [2,3,4], element: 'dark', telegraphMsg: '⚠️ El abismo drena tu energía...' },
+        { id: 'void_storm',   name: '🌪️ Tormenta Niveles', damage: 95, effect: cursedEffect, usableAtPhase: [3,4], element: 'dark' },
+        { id: 'eternal_dark', name: '💀 Oscuridad Eterna', damage: 130, usableAtPhase: [4], element: 'dark', telegraphMsg: '🌌 ¡EL ABISMO SE CIERRA!' },
+      ],
+      golem: [
+        { id: 'rock_throw',   name: '🪨 Lanzamiento Pétreo', damage: 30, usableAtPhase: [1,2,3,4], element: 'earth' },
+        { id: 'iron_wall',    name: '🧱 Muro del Deudor', damage: 0, usableAtPhase: [2,3,4], element: 'earth', telegraphMsg: '⚠️ El Golem endurece su piel...' },
+        { id: 'earthquake',   name: '🌋 Terremoto Factura', damage: 85, effect: stunEffect, usableAtPhase: [3,4], element: 'earth' },
+        { id: 'unmovable',    name: '🗿 Deuda Inamovible', damage: 110, effect: cursedEffect, usableAtPhase: [4], element: 'earth' },
+      ],
+      tickets: [
+        { id: 'paper_slash',  name: '📄 Corte de Papel', damage: 25, usableAtPhase: [1,2,3,4], element: 'ice' },
+        { id: 'bureaucracy',  name: '🏛️ Burocracia Ninja', damage: 45, effect: bleedEffect, usableAtPhase: [2,3,4], element: 'ice' },
+        { id: 'slip_storm',   name: '🌪️ Tormenta de Tickets', damage: 75, effect: poisonEffect, usableAtPhase: [3,4], element: 'ice' },
+        { id: 'final_penalty',name: '🚨 Sanción Final',  damage: 105, effect: cursedEffect, usableAtPhase: [4], element: 'ice' },
+      ],
+      cash: [
+        { id: 'greedy_hand',  name: '🖐️ Garra Codiciosa', damage: 30, usableAtPhase: [1,2,3,4], element: 'fire' },
+        { id: 'inflation',    name: '📈 Inflación Local',   damage: 55, effect: burnEffect, usableAtPhase: [2,3,4], element: 'fire', telegraphMsg: '🔥 ¡El dinero pierde valor!' },
+        { id: 'money_burn',   name: '🔥 Dinero Quemado',    damage: 90, usableAtPhase: [3,4], element: 'fire' },
+        { id: 'total_crash',  name: '💀 Colapso del Mercado', damage: 140, effect: cursedEffect, usableAtPhase: [4], element: 'fire', telegraphMsg: '🌋 ¡TODO CAE!' },
       ],
     }
     return skills[type]

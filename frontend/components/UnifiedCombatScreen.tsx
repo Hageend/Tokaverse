@@ -5,8 +5,8 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, Platform, Image, Dimensions, ScrollView,
 } from 'react-native';
-import { Audio } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import { useAudioPlayer } from 'expo-audio';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, withRepeat,
   FadeIn, FadeInUp, FadeOut, Easing, SharedValue,
@@ -21,8 +21,9 @@ import { STATUS_INFO, AnyStatus } from '../engine/StatusEngine';
 import { Colors } from '../constants/Colors';
 import { ELEMENT_INFO } from '../types/elements';
 import type { PlayerCard } from '../types/fusion';
-import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem } from '../store/useInventoryStore';
+import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem, RARITY_COLORS } from '../store/useInventoryStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { COIN_SPRITES, ITEM_SPRITES } from '../data/classSkills';
 import { EnemyMapper } from '../utils/EnemyMapper';
 
 // Components
@@ -136,8 +137,8 @@ const StatusChips = React.memo(({ effects }: { effects: { type: AnyStatus; durat
   );
 });
 
-const ActionBtn = React.memo(({ label, sub, color, onPress, disabled, showDurability }: {
-  label: string; sub?: string; color: string; onPress: () => void; disabled?: boolean; showDurability?: boolean
+const ActionBtn = React.memo(({ label, sub, color, icon, onPress, disabled, showDurability }: {
+  label: string; sub?: string; color: string; icon?: string; onPress: () => void; disabled?: boolean; showDurability?: boolean
 }) => {
   const sc = useSharedValue(1);
   const animated = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }] }));
@@ -154,7 +155,10 @@ const ActionBtn = React.memo(({ label, sub, color, onPress, disabled, showDurabi
         onPress={() => { sc.value = withSequence(withTiming(0.94, { duration: 80 }), withSpring(1)); onPress(); }}
         disabled={disabled}
       >
-        <Text style={[actionBtnStyles.label, { color }]}>{label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {icon && <Ionicons name={icon as any} size={14} color={color} />}
+          <Text style={[actionBtnStyles.label, { color }]}>{label}</Text>
+        </View>
         {sub && <Text style={actionBtnStyles.sub}>{sub}</Text>}
         {showDurability && durabilityPct > 0 && <View style={actionBtnStyles.durability}><View style={[actionBtnStyles.fill, { width: `${durabilityPct}%` }]} /></View>}
       </TouchableOpacity>
@@ -165,37 +169,9 @@ const ActionBtn = React.memo(({ label, sub, color, onPress, disabled, showDurabi
 // ─── LOOT MAGNET ─────────────────────────────────────────────────────────────
 
 export interface LootItem extends BossDropItem { id: string; }
-const PIXEL_ARTS: Record<string, any> = {
-  item_chest:             require('../assets/images/items/item_chest.png'),
-  item_sword:             require('../assets/images/items/item_sword.png'),
-  item_sword_diamond:     require('../assets/images/items/item_sword_diamond.png'),
-  item_sword_infernal:    require('../assets/images/items/item_sword_infernal.png'),
-  item_sword_Thunder:     require('../assets/images/items/item_sword_Thunder.png'),
-  item_shield:            require('../assets/images/items/item_shield.png'),
-  item_shield_chest:      require('../assets/images/items/item_shield_chest.png'),
-  item_shield_elemental:  require('../assets/images/items/item_shield_elemental.png'),
-  item_potion:            require('../assets/images/items/item_potion.png'),
-  item_potion_HP:         require('../assets/images/items/item_potion_HP.png'),
-  item_potion_energy:     require('../assets/images/items/item_potion_energy.png'),
-  item_potion_mana:       require('../assets/images/items/item_potion_mana.png'),
-  item_potion_strong:     require('../assets/images/items/item_potion_strong.png'),
-  item_card:              require('../assets/images/items/item_card.png'),
-  item_card_hp:           require('../assets/images/items/item_card_hp.png'),
-  item_card_mana:         require('../assets/images/items/item_card_mana.png'),
-  item_card_xp:           require('../assets/images/items/item_card_xp.png'),
-  item_card_energy:       require('../assets/images/items/item_card_energy.png'),
-  item_card_strong:       require('../assets/images/items/item_card_strong.png'),
-  item_ring_mana:         require('../assets/images/items/item_ring_mana.png'),
-  item_ring_shield:       require('../assets/images/items/item_ring_shield.png'),
-  item_ring_strong:       require('../assets/images/items/item_ring_strong.png'),
-  item_crystal_mana:      require('../assets/images/items/item_crystal_mana.png'),
-  item_compass:           require('../assets/images/items/item_compass.png'),
-  item_ritual_incense:    require('../assets/images/items/item_ritual_incense.png'),
-  item_tinypotion_energy: require('../assets/images/items/item_tinypotion_energy.png'),
-};
 
 const LootMagnetEffect = React.memo(({ item, startX, startY, endX, endY, onComplete }: {
-  item: LootItem; startX: number; startY: number; endX: number; endY: number; onComplete: (id: string) => void;
+  item: BossDropItem & { id: string }; startX: number; startY: number; endX: number; endY: number; onComplete: (id: string) => void;
 }) => {
   const tx = useSharedValue(startX); const ty = useSharedValue(startY); const sc = useSharedValue(0);
   useEffect(() => {
@@ -211,7 +187,7 @@ const LootMagnetEffect = React.memo(({ item, startX, startY, endX, endY, onCompl
   const anim = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: sc.value }] }));
   return (
     <Animated.View style={[lootStyles.container, anim]}>
-      {item.pixelArt ? <Image source={PIXEL_ARTS[item.pixelArt]} style={lootStyles.img} /> : <Text style={lootStyles.icon}>{item.icon}</Text>}
+      {item.pixelArt ? <Image source={ITEM_SPRITES[item.pixelArt as keyof typeof ITEM_SPRITES]} style={lootStyles.img} /> : <Text style={lootStyles.icon}>{item.icon}</Text>}
     </Animated.View>
   );
 });
@@ -225,11 +201,10 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
     return EnemyMapper.simpleToBoss(opp as any);
   }, [props.opponent]);
   const [vol, setVol] = useState(props.globalVolume ?? 0.7);
-  const soundRef = useRef<Audio.Sound | null>(null);
   const { damageNumbers, clearDamageEvent, addDamageEvent } = useCombatStore();
   const flash = useSharedValue(0);
   const flashAnim = useAnimatedStyle(() => ({ opacity: flash.value }));
-  const [loots, setLoots] = useState<LootItem[]>([]);
+  const [loots, setLoots] = useState<(BossDropItem & { id: string })[]>([]);
 
   // Shake effects
   const heroShake = useSharedValue(0);
@@ -251,21 +226,20 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const inventory = useInventoryStore(s => s.items);
   const consumables = useMemo(() => inventory.filter(i => i.type === 'consumable'), [inventory]);
 
-  const [victoryRewards, setVictoryRewards] = useState<{ xp: number, items: LootItem[], inventoryFull?: boolean } | null>(null);
+  const [victoryRewards, setVictoryRewards] = useState<{ xp: number, starCoins: number, items: BossDropItem[], inventoryFull?: boolean } | null>(null);
+
+  const combatPlayer = useAudioPlayer(COMBAT_TRACKS[Math.floor(Math.random() * 6)]);
+  useEffect(() => {
+    if (combatPlayer) {
+      combatPlayer.loop = true;
+      combatPlayer.volume = vol;
+      combatPlayer.play();
+    }
+  }, [combatPlayer]);
 
   useEffect(() => {
-    let mounted = true;
-    async function play() {
-      try {
-        const { sound } = await Audio.Sound.createAsync(COMBAT_TRACKS[Math.floor(Math.random() * 6)], { volume: vol, isLooping: true, shouldPlay: true });
-        if (mounted) soundRef.current = sound; else await sound.unloadAsync();
-      } catch (e) {}
-    }
-    play();
-    return () => { mounted = false; soundRef.current?.unloadAsync(); };
-  }, []);
-
-  useEffect(() => { soundRef.current?.setVolumeAsync(vol); }, [vol]);
+    if (combatPlayer) combatPlayer.volume = vol;
+  }, [vol, combatPlayer]);
 
   const [state, setState] = useState<CombatState>(() => TurnManager.initCombat(props.player, bossOpponent, props.equippedCards));
   const [busy, setBusy] = useState(false);
@@ -302,8 +276,9 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
         // Always try to get a drop if bossType/Id exists in BOSS_DROPS
         const drop = BOSS_DROPS[bossIdRaw]?.guaranteed ?? selectRandomDrop(bossIdRaw);
         const xp = isMob ? ((props.opponent as any).xpReward || 80) : 500;
+        const starCoins = isMob ? 25 : 150; // Recompensa en Monedas de Estrella
         
-        let finalItems: LootItem[] = [];
+        let finalItems: (BossDropItem & { id: string })[] = [];
         let invFull = false;
         if (drop) {
           const loot = { ...drop, id: `L_${Date.now()}` };
@@ -315,10 +290,11 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           if (!success) invFull = true;
         }
         
-        // Garantía de XP
+        // Garantía de recompensas
         usePlayerStore.getState().addXp(xp);
+        usePlayerStore.getState().addStarCoins(starCoins);
         
-        setVictoryRewards({ xp, items: finalItems, inventoryFull: invFull });
+        setVictoryRewards({ xp, starCoins, items: finalItems, inventoryFull: invFull });
         setTimeout(() => props.onVictory?.(next.boss), 5000); 
       }
     } finally { busyRef.current = false; setBusy(false); }
@@ -358,12 +334,15 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
             </Animated.View>
           )}
 
-          <View style={endStyles.chestRow}>
-             <Animated.Image 
-               entering={FadeIn.delay(300)}
-               source={PIXEL_ARTS.item_chest} 
-               style={endStyles.chestImg} 
-             />
+          <View style={endStyles.lootHexGrid}>
+            {victoryRewards.items.map((item, idx) => (
+              <View key={`${item.name}-${idx}`} style={endStyles.lootItem}>
+                <View style={[endStyles.lootIconBox, { borderColor: RARITY_COLORS[item.rarity] }]}>
+                   <Image source={ITEM_SPRITES[item.pixelArt as keyof typeof ITEM_SPRITES] || { uri: item.icon }} style={endStyles.lootImg} />
+                </View>
+                <Text style={endStyles.lootName} numberOfLines={1}>{item.name}</Text>
+              </View>
+            ))}
           </View>
 
           <View style={endStyles.xpRow}>
@@ -371,22 +350,15 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
             <Text style={endStyles.xpVal}>+{victoryRewards.xp} XP</Text>
           </View>
 
-          {victoryRewards.items.length > 0 && (
-            <View style={endStyles.lootList}>
-              <Text style={endStyles.lootHeader}>BOTÍN OBTENIDO:</Text>
-              {victoryRewards.items.map((item, idx) => (
-                <Animated.View entering={FadeIn.delay(600 + idx * 200)} key={item.id} style={endStyles.lootRow}>
-                  <View style={[endStyles.lootIconBox, { borderColor: Colors.tertiary }]}>
-                    {item.pixelArt ? <Image source={PIXEL_ARTS[item.pixelArt]} style={{ width: 24, height: 24 }} /> : <Text style={{ fontSize: 18 }}>{item.icon}</Text>}
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={endStyles.lootName}>{item.name}</Text>
-                    <Text style={[endStyles.lootRarity, { color: Colors.tertiary }]}>{item.rarity.toUpperCase()}</Text>
-                  </View>
-                </Animated.View>
-              ))}
+          <View style={[endStyles.xpRow, { marginTop: -8 }]}>
+            <Text style={endStyles.xpLabel}>ESTRELLAS OBTENIDAS</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Image source={COIN_SPRITES.star} style={{ width: 14, height: 14 }} />
+              <Text style={[endStyles.xpVal, { color: '#FFD700' }]}>+{victoryRewards.starCoins}</Text>
             </View>
-          )}
+          </View>
+
+          {/* Botón de continuación */}
 
           <TouchableOpacity style={endStyles.continueBtn} onPress={props.onExit}>
             <Text style={endStyles.btnTxt}>ACEPTAR Y VOLVER</Text>
@@ -428,17 +400,30 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
       </View>
 
       <View style={[styles.box, { borderColor: bpc + '44' }]}>
+        {/* Telegraph Alerta — MEJORADO */}
+        {state.phase === 'player_turn' && state.telegraphMsg && (
+          <Animated.View entering={FadeInUp} style={styles.telegraphBanner}>
+            <Ionicons name="warning" size={14} color="#EF4444" />
+            <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
+          </Animated.View>
+        )}
+        
         <View style={styles.row}>
           <Text style={[styles.name, { color: bpc }]}>{state.boss.name}</Text>
           {state.boss.debtAmount > 0 && <View style={[styles.badge, { backgroundColor: bpc + '15', borderColor: bpc + '55' }]}><Text style={[styles.badT, { color: bpc }]}>FASE {state.boss.phase}</Text></View>}
         </View>
         <StatBar current={state.boss.hp} max={state.boss.maxHp} color={bpc} label="HP" />
+        {/* ATB Boss */}
+        <View style={styles.atbTrack}>
+          <View style={[styles.atbFill, { width: state.phase === 'boss_turn' ? '100%' : '30%', backgroundColor: bpc }]} />
+        </View>
+
         <StatusChips effects={state.boss.statusEffects} />
         <View style={styles.center}>
           <AnimatedSprite 
             spriteUrl={state.boss.sprite} 
             onHit={state.phase === 'boss_turn'} 
-            sizeScale={state.boss.skills.length > 1 ? 1.3 : 1} 
+            sizeScale={1.3} 
             shakeAnim={enemyShake}
           />
         </View>
@@ -454,26 +439,51 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
             />
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.pName}>{state.player.name}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.pName}>{state.player.name}</Text>
+              {/* Combo Counter UI */}
+              <View style={styles.comboRow}>
+                {[1,2,3,4].map(i => (
+                  <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />
+                ))}
+              </View>
+            </View>
             <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
             <StatBar current={state.player.mana} max={state.player.maxMana} color="#3b82f6" label="MP" />
+            {/* ATB Player */}
+            <View style={styles.atbTrack}>
+              <View style={[styles.atbFill, { width: state.phase === 'player_turn' ? '100%' : '10%', backgroundColor: '#22c55e' }]} />
+            </View>
           </View>
         </View>
         <StatusChips effects={state.player.statusEffects} />
       </View>
 
-      <View style={styles.log}><Text style={styles.logT}>{lastLog?.message || '...'}</Text></View>
+      {/* Log Multilínea — Mejorado */}
+      <View style={styles.log}>
+        <ScrollView 
+          ref={ref => ref?.scrollToEnd()} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+        >
+          {state.log.slice(-3).map((m, i) => (
+            <Text key={i} style={[styles.logT, i < 2 && { opacity: 0.5, fontSize: 10 }]}>
+              {m.message}
+            </Text>
+          ))}
+        </ScrollView>
+      </View>
 
       <View style={styles.actions}>
         {state.phase === 'player_turn' && !busy ? (
           <>
             <View style={styles.aRow}>
-              <ActionBtn label="ATACAR" color="#ef4444" onPress={() => handleAction({ type: 'ATTACK' })} disabled={frozen} showDurability />
-              <ActionBtn label="DEFENDER" color="#3b82f6" onPress={() => handleAction({ type: 'DEFEND' })} disabled={frozen} />
+              <ActionBtn label="ATACAR" icon="flash" color="#ef4444" onPress={() => handleAction({ type: 'ATTACK' })} disabled={frozen} showDurability />
+              <ActionBtn label="DEFENDER" icon="shield" color="#3b82f6" onPress={() => handleAction({ type: 'DEFEND' })} disabled={frozen} />
             </View>
             <View style={styles.aRow}>
-              {state.player.skills.slice(0, 1).map(s => <ActionBtn key={s.id} label={s.name} sub={`${s.manaCost}MP`} color="#a855f7" onPress={() => handleAction({ type: 'SKILL', skillId: s.id })} disabled={frozen || state.player.mana < s.manaCost} />)}
-              <ActionBtn label="BOLSA" color="#A855F7" onPress={() => setShowBag(true)} />
+              {state.player.skills.slice(0, 1).map(s => <ActionBtn key={s.id} label={s.name} icon="sparkles" sub={`${s.manaCost}MP`} color="#a855f7" onPress={() => handleAction({ type: 'SKILL', skillId: s.id })} disabled={frozen || state.player.mana < s.manaCost} />)}
+              <ActionBtn label="BOLSA" icon="briefcase" color="#A855F7" onPress={() => setShowBag(true)} />
             </View>
           </>
         ) : <View style={styles.wait}><Text style={styles.waitT}>TURNO ENEMIGO...</Text></View>}
@@ -537,12 +547,29 @@ const styles = StyleSheet.create({
   badT: { fontSize: 9, fontWeight: '800' },
   center: { alignItems: 'center', marginTop: 10 },
   pName: { color: '#fff', fontSize: 13, fontWeight: '900', marginBottom: 4 },
-  log: { marginHorizontal: 12, backgroundColor: '#000', borderRadius: 10, padding: 12, marginBottom: 10, minHeight: 46 },
-  logT: { color: '#10b981', fontSize: 11 },
+  log: { marginHorizontal: 12, backgroundColor: '#000', borderRadius: 10, padding: 8, marginBottom: 10, height: 60, borderWidth: 1, borderColor: 'rgba(16,185,129,0.2)' },
+  logT: { color: '#10b981', fontSize: 11, marginBottom: 2 },
   actions: { paddingHorizontal: 12, gap: 8 },
   aRow: { flexDirection: 'row', gap: 8 },
   wait: { height: 60, justifyContent: 'center', alignItems: 'center' },
   waitT: { color: '#ffffff40', fontWeight: '900', letterSpacing: 1 },
+
+  // Nuevos estilos Premium
+  telegraphBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    paddingVertical: 6, paddingHorizontal: 10,
+    borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
+    marginBottom: 10,
+  },
+  telegraphT: { color: '#ef4444', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  
+  atbTrack: { height: 3, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 2, marginTop: 4, overflow: 'hidden' },
+  atbFill:  { height: '100%', borderRadius: 2 },
+
+  comboRow: { flexDirection: 'row', gap: 4 },
+  comboDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  comboDotActive: { backgroundColor: '#FFD700', borderColor: '#DAA520' },
 });
 
 const barStyles = StyleSheet.create({
@@ -588,12 +615,11 @@ const endStyles = StyleSheet.create({
   xpRow: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#ffffff08', padding: 12, borderRadius: 12, marginBottom: 15 },
   xpLabel: { color: '#ffffff60', fontWeight: '800', fontSize: 12 },
   xpVal: { color: '#22c55e', fontWeight: '900', fontSize: 16 },
-  lootList: { width: '100%', marginBottom: 20 },
-  lootHeader: { color: '#ffffff40', fontSize: 10, fontWeight: '900', marginBottom: 10 },
-  lootRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff05', padding: 8, borderRadius: 12, marginBottom: 8 },
-  lootIconBox: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  lootName: { color: '#FFF', fontSize: 12, fontWeight: '800' },
-  lootRarity: { fontSize: 9, fontWeight: '900', marginTop: 2 },
+  lootHexGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, width: '100%', marginBottom: 20 },
+  lootItem: { alignItems: 'center', width: 60 },
+  lootIconBox: { width: 50, height: 50, borderRadius: 12, backgroundColor: '#ffffff08', borderWidth: 2, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  lootImg: { width: 34, height: 34 },
+  lootName: { color: '#ffffff80', fontSize: 9, fontWeight: '700', textAlign: 'center' },
   continueBtn: { backgroundColor: '#4f46e5', width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   btnTxt: { color: '#fff', fontWeight: '900', fontSize: 13 },
   kanji: { fontSize: 80, fontWeight: '900', color: '#fbbf24' },
