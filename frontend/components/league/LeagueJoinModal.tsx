@@ -4,8 +4,9 @@
 import React, { useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  Animated, Easing, Image, Dimensions,
+  Animated, Easing, Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Svg, {
   LinearGradient, Stop, Mask, Rect, G, Polygon,
   Defs,
@@ -35,8 +36,6 @@ interface Props {
 }
 
 // ── Animación de estrella ────────────────────────────────────────────────────
-// Usamos 4 Animated.Value ciclando strokeDashoffset en polígonos SVG
-
 const POINTS = [
   "64 49 66.322 58.992 71.071 56.929 69.008 61.678 79 64 69.008 66.322 71.071 71.071 66.322 69.008 64 79 61.678 69.008 56.929 71.071 58.992 66.322 49 64 58.992 61.678 56.929 56.929 61.678 58.992 64 49",
   "64 34 68.644 53.983 78.142 49.858 74.017 59.356 94 64 74.017 68.644 78.142 78.142 68.644 74.017 64 94 59.356 74.017 49.858 78.142 53.983 68.644 34 64 53.983 59.356 49.858 49.858 59.356 53.983 64 34",
@@ -45,24 +44,21 @@ const POINTS = [
 ];
 const DASH_ARRAYS = ["31 93", "62 186", "93 279", "124 372"];
 
-// Crear versión animada del Polygon de react-native-svg
 const AnimatedPolygon = Animated.createAnimatedComponent(Polygon as any);
 
 function StarAnimation({ color }: { color: string }) {
   const DUR = 2000;
-
-  // Los 4 offsets. stroke1/2 van 0→max, stroke3/4 van max→0 (reverse)
   const offsets = [
-    useRef(new Animated.Value(0)).current,       // stroke1: 0→124
-    useRef(new Animated.Value(124)).current,     // stroke2: delay=-1s → empieza a mitad
-    useRef(new Animated.Value(372)).current,     // stroke3 reverse: 372→0
-    useRef(new Animated.Value(248)).current,     // stroke4 reverse+delay: 248→0→248
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(124)).current,
+    useRef(new Animated.Value(372)).current,
+    useRef(new Animated.Value(248)).current,
   ];
 
   useEffect(() => {
     const animations = [
       Animated.loop(
-        Animated.timing(offsets[0], { toValue: 124,  from: 0,   duration: DUR, easing: Easing.linear, useNativeDriver: false } as any)
+        Animated.timing(offsets[0], { toValue: 124,  duration: DUR, easing: Easing.linear, useNativeDriver: false })
       ),
       Animated.loop(
         Animated.timing(offsets[1], { toValue: 248,  duration: DUR, easing: Easing.linear, useNativeDriver: false })
@@ -74,7 +70,6 @@ function StarAnimation({ color }: { color: string }) {
         Animated.timing(offsets[3], { toValue: 0,    duration: DUR, easing: Easing.linear, useNativeDriver: false })
       ),
     ];
-
     animations.forEach(a => a.start());
     return () => animations.forEach(a => a.stop());
   }, []);
@@ -90,14 +85,10 @@ function StarAnimation({ color }: { color: string }) {
           <Rect x={0} y={0} width={128} height={128} fill="url(#jm-grad)" />
         </Mask>
       </Defs>
-
       <G strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" fill="none">
-        {/* Sombra fantasma (dim) */}
         <G stroke={color} opacity={0.2}>
           {POINTS.map((pts, i) => <Polygon key={`g-${i}`} points={pts} />)}
         </G>
-
-        {/* Trazos animados azules */}
         <G stroke={color}>
           {POINTS.map((pts, i) => (
             <AnimatedPolygon
@@ -108,8 +99,6 @@ function StarAnimation({ color }: { color: string }) {
             />
           ))}
         </G>
-
-        {/* Trazos animados púrpura con máscara */}
         <G mask="url(#jm-mask)" stroke="hsl(283,90%,60%)">
           {POINTS.map((pts, i) => (
             <AnimatedPolygon
@@ -125,7 +114,6 @@ function StarAnimation({ color }: { color: string }) {
   );
 }
 
-// ── Modal Principal ───────────────────────────────────────────────────────────
 export function LeagueJoinModal({ visible, leagueName, tier, onClose }: Props) {
   const scaleAnim   = useRef(new Animated.Value(0.3)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -138,8 +126,6 @@ export function LeagueJoinModal({ visible, leagueName, tier, onClose }: Props) {
 
   useEffect(() => {
     if (!visible) return;
-
-    // Reset
     scaleAnim.setValue(0.3);
     opacityAnim.setValue(0);
     coinScale.setValue(0);
@@ -162,22 +148,16 @@ export function LeagueJoinModal({ visible, leagueName, tier, onClose }: Props) {
   return (
     <Modal transparent visible={visible} animationType="none" statusBarTranslucent>
       <Animated.View style={[styles.overlay, { opacity: opacityAnim }]}>
-        {/* Toque fuera cierra */}
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-
         <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
-
-          {/* Estrella giratoria + moneda superpuesta */}
           <View style={styles.starWrap}>
             <StarAnimation color="hsl(223,90%,55%)" />
             <Animated.View style={[styles.coinOverlay, { transform: [{ scale: coinScale }] }]}>
               <View style={[styles.coinBg, { shadowColor: tierColor }]}>
-                <Image source={leagueImg} style={styles.coinImg} resizeMode="contain" />
+                <Image source={leagueImg} style={styles.coinImg} contentFit="contain" />
               </View>
             </Animated.View>
           </View>
-
-          {/* Texto animado */}
           <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }], alignItems: 'center' }}>
             <Text style={styles.titleSmall}>¡Te has unido a la liga!</Text>
             <Text style={[styles.leagueName, { color: tierColor }]}>
@@ -187,8 +167,6 @@ export function LeagueJoinModal({ visible, leagueName, tier, onClose }: Props) {
               Completa misiones para escalar el ranking y ganar recompensas exclusivas.
             </Text>
           </Animated.View>
-
-          {/* Botón */}
           <TouchableOpacity
             style={[styles.btn, { backgroundColor: tierColor + '22', borderColor: tierColor + '66' }]}
             onPress={onClose}

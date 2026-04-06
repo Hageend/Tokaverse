@@ -1,17 +1,19 @@
 // components/UnifiedCombatScreen.tsx
 // TokaVerse RPG — Sistema de Combate Unificado JRPG (Arena + Historia)
+// Modernizado con Layout Responsivo (Enemigo | Center Arena | Jugador)
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform, Image, Dimensions, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, ScrollView, useWindowDimensions,
 } from 'react-native';
-import { useAudioPlayer } from 'expo-audio';
+import { Image } from 'expo-image';
+import { useCrossPlatformAudio } from '../hooks/useCrossPlatformAudio';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, withRepeat,
   FadeIn, FadeInUp, FadeOut, Easing, SharedValue,
 } from 'react-native-reanimated';
-import LottieView from 'lottie-react-native';
+import LottieView from '../components/LottieWrapper';
 
 // RPG Engines & Stores
 import { TurnManager, CombatState, CombatAction } from '../engine/TurnManager';
@@ -116,7 +118,7 @@ const AnimatedSprite = React.memo(({ spriteUrl, onHit, sizeScale = 1, shakeAnim 
   
   return (
     <Animated.View style={animated}>
-      <Image source={typeof spriteUrl === 'number' ? spriteUrl : { uri: spriteUrl }} style={{ width: 120, height: 120 }} resizeMode="contain" />
+      <Image source={typeof spriteUrl === 'number' ? spriteUrl : { uri: spriteUrl }} style={{ width: 120, height: 120 }} contentFit="contain" />
     </Animated.View>
   );
 });
@@ -197,6 +199,9 @@ const LootMagnetEffect = React.memo(({ item, startX, startY, endX, endY, onCompl
 // ─── MAIN ENGINE ─────────────────────────────────────────────────────────────
 
 export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
+  const { width: widthWin, height: heightWin } = useWindowDimensions();
+  const isDesktop = widthWin >= 1024;
+
   const bossOpponent = useMemo(() => {
     const opp = props.opponent;
     if ((opp as any).debtType && (opp as any).skills) return opp as Boss;
@@ -233,18 +238,11 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const [showLootModal, setShowLootModal] = useState(false);
   const [lootData, setLootData] = useState<LootDropDisplay | null>(null);
 
-  const combatPlayer = useAudioPlayer(COMBAT_TRACKS[Math.floor(Math.random() * 6)]);
+  const combatPlayer = useCrossPlatformAudio(COMBAT_TRACKS[Math.floor(Math.random() * 6)]);
+  
   useEffect(() => {
-    if (combatPlayer) {
-      combatPlayer.loop = true;
-      combatPlayer.volume = vol;
-      combatPlayer.play();
-    }
-  }, [combatPlayer]);
-
-  useEffect(() => {
-    if (combatPlayer) combatPlayer.volume = vol;
-  }, [vol, combatPlayer]);
+    combatPlayer.setVolume(vol);
+  }, [vol]);
 
   const [state, setState] = useState<CombatState>(() => TurnManager.initCombat(props.player, bossOpponent, props.equippedCards));
   const [busy, setBusy] = useState(false);
@@ -273,16 +271,12 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
       setTimeout(() => setHeroAttacking(false), 600);
       if (next.phase === 'victory') {
         flash.value = withSequence(withTiming(1, { duration: 50 }), withTiming(0, { duration: 300 }));
-        setAnimatingVictory(true); // <--- Nueva animación de trofeo solicitada
-        
-        // Mobb vs Boss check
+        setAnimatingVictory(true);
         const isMob = next.boss.skills.length <= 2;
         const bossIdRaw = next.boss.id?.replace('boss_','') || 'toka_despensa';
-        
-        // Always try to get a drop if bossType/Id exists in BOSS_DROPS
         const drop = BOSS_DROPS[bossIdRaw]?.guaranteed ?? selectRandomDrop(bossIdRaw);
         const xp = isMob ? ((props.opponent as any).xpReward || 80) : 500;
-        const starCoins = isMob ? 25 : 150; // Recompensa en Monedas de Estrella
+        const starCoins = isMob ? 25 : 150;
         
         let finalItems: (BossDropItem & { id: string })[] = [];
         let invFull = false;
@@ -290,29 +284,19 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           const loot = { ...drop, id: `L_${Date.now()}` };
           setLoots([loot]);
           finalItems.push(loot);
-          
-          // Persistencia inmediata
           const success = useInventoryStore.getState().addItem(loot as any, next.boss.name);
           if (!success) invFull = true;
         }
-        
-        // Garantía de recompensas
         usePlayerStore.getState().addXp(xp);
         usePlayerStore.getState().addStarCoins(starCoins);
-        
         setVictoryRewards({ xp, starCoins, items: finalItems, inventoryFull: invFull });
-
-        // Colectar el drop aleatorio también
         const randomDrop = selectRandomDrop(bossIdRaw);
-
-        // Mostrar LootDropModal con fan animation
         setLootData({
           guaranteed: drop ?? { icon: '🧪', name: 'Poción Menor', rarity: 'common', type: 'consumable' },
           random: randomDrop,
           bossName: next.boss.name,
         });
         setShowLootModal(true);
-
         setTimeout(() => props.onVictory?.(next.boss), 5000); 
       }
     } finally { busyRef.current = false; setBusy(false); }
@@ -346,14 +330,11 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   if (isVic && victoryRewards) {
     return (
       <View style={endStyles.screen}>
-        {isVic && <LottieView source={require('../assets/confetti.json')} autoPlay loop={false} style={StyleSheet.absoluteFill} />}
-
-        {/* LootDropModal reemplaza la pantalla básica de loot */}
+        {isVic && Platform.OS !== 'web' && <LottieView source={require('../assets/confetti.json')} autoPlay loop={false} style={StyleSheet.absoluteFill} />}
         <LootDropModal
           visible={showLootModal}
           loot={lootData}
           onClaim={(guaranteed, random) => {
-            // Añadir drops al inventario si no se añadieron aún
             const store = useInventoryStore.getState();
             if (!victoryRewards.items.find(i => i.name === guaranteed.name)) {
               store.addItem(guaranteed as any, lootData?.bossName ?? 'Jefe');
@@ -367,18 +348,15 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
         {!showLootModal && (
           <Animated.View entering={FadeInUp.springify()} style={endStyles.resBox}>
             <Text style={endStyles.resTitle}>🏆 ¡VICTORIA!</Text>
-
             {victoryRewards.inventoryFull && (
               <Animated.View entering={FadeIn} style={endStyles.fullWarning}>
                 <Text style={endStyles.fullWarningText}>⚠️ INVENTARIO LLENO. No se pudo guardar el botín.</Text>
               </Animated.View>
             )}
-
             <View style={endStyles.xpRow}>
               <Text style={endStyles.xpLabel}>EXPERIENCIA</Text>
               <Text style={endStyles.xpVal}>+{victoryRewards.xp} XP</Text>
             </View>
-
             <View style={[endStyles.xpRow, { marginTop: -8 }]}>
               <Text style={endStyles.xpLabel}>ESTRELLAS OBTENIDAS</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -386,7 +364,6 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
                 <Text style={[endStyles.xpVal, { color: '#FFD700' }]}>+{victoryRewards.starCoins}</Text>
               </View>
             </View>
-
             <TouchableOpacity style={endStyles.continueBtn} onPress={props.onExit}>
               <Text style={endStyles.btnTxt}>ACEPTAR Y VOLVER</Text>
             </TouchableOpacity>
@@ -405,118 +382,176 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   );
 
   const bpc = PHASE_THEME_COLORS[state.boss.phase] ?? '#fbbf24';
-  const lastLog = state.log[state.log.length - 1];
   const frozen = state.player.statusEffects.some(e => e.type === 'frozen');
 
   return (
     <View style={styles.root}>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFF', zIndex: 99 }, flashAnim]} />
+      
+      {/* HUD & TOP BAR */}
       <View style={styles.topBar}>
         <View style={styles.vol}><TouchableOpacity onPress={() => setVol(v => Math.max(0, v - 0.1))}><Ionicons name="volume-low" color="#FFF" size={14} /></TouchableOpacity><Text style={styles.volT}>{Math.round(vol * 100)}%</Text><TouchableOpacity onPress={() => setVol(v => Math.min(1, v + 0.1))}><Ionicons name="volume-high" color="#FFF" size={14} /></TouchableOpacity></View>
-        <View style={styles.turn}><Text style={styles.turnT}>TURNO {state.turn}</Text></View>
+        {!isDesktop && <View style={styles.turn}><Text style={styles.turnT}>TURNO {state.turn}</Text></View>}
         <TouchableOpacity onPress={props.onExit} style={styles.exit}><Text style={styles.exitT}>Huir</Text></TouchableOpacity>
       </View>
 
       <View style={uiStyles.cardHud}>
         {state.equippedCards.map((c, i) => (
           <Animated.View entering={FadeInUp.delay(i * 100)} key={`${c.cardId}_${i}`} style={uiStyles.cardChip}>
-            <Text style={uiStyles.cardEmoji}>
-              {ELEMENT_INFO[c.element || 'thunder']?.emoji || '🃏'}
-            </Text>
+            <Text style={uiStyles.cardEmoji}>{ELEMENT_INFO[c.element || 'thunder']?.emoji || '🃏'}</Text>
           </Animated.View>
         ))}
       </View>
 
-      <View style={[styles.box, { borderColor: bpc + '44' }]}>
-        {/* Telegraph Alerta — MEJORADO */}
-        {state.phase === 'player_turn' && state.telegraphMsg && (
-          <Animated.View entering={FadeInUp} style={styles.telegraphBanner}>
-            <Ionicons name="warning" size={14} color="#EF4444" />
-            <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
-          </Animated.View>
-        )}
-        
-        <View style={styles.row}>
-          <Text style={[styles.name, { color: bpc }]}>{state.boss.name}</Text>
-          {state.boss.debtAmount > 0 && <View style={[styles.badge, { backgroundColor: bpc + '15', borderColor: bpc + '55' }]}><Text style={[styles.badT, { color: bpc }]}>FASE {state.boss.phase}</Text></View>}
-        </View>
-        <StatBar current={state.boss.hp} max={state.boss.maxHp} color={bpc} label="HP" />
-        {/* ATB Boss */}
-        <View style={styles.atbTrack}>
-          <View style={[styles.atbFill, { width: state.phase === 'boss_turn' ? '100%' : '30%', backgroundColor: bpc }]} />
-        </View>
-
-        <StatusChips effects={state.boss.statusEffects} />
-        <View style={styles.center}>
-          <AnimatedSprite 
-            spriteUrl={state.boss.sprite} 
-            onHit={state.phase === 'boss_turn'} 
-            sizeScale={1.3} 
-            shakeAnim={enemyShake}
-          />
-        </View>
-      </View>
-
-      <View style={styles.box}>
-        <View style={styles.row}>
-          <View style={{ alignItems: 'center' }}>
-            <CharacterAvatar 
-              spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')} 
-              isAttacking={isHeroAttacking}
-              isTakingDamage={isHeroHit}
-            />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.pName}>{state.player.name}</Text>
-              {/* Combo Counter UI */}
-              <View style={styles.comboRow}>
-                {[1,2,3,4].map(i => (
-                  <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />
-                ))}
+      {isDesktop ? (
+        <View style={styles.desktopLayout}>
+          {/* LEFT: ENEMY */}
+          <View style={styles.sideCol}>
+            <View style={[styles.box, { borderColor: bpc + '44', flex: 1 }]}>
+               <View style={styles.row}>
+                <Text style={[styles.name, { color: bpc }]}>{state.boss.name}</Text>
+                {state.boss.debtAmount > 0 && <View style={[styles.badge, { backgroundColor: bpc + '15', borderColor: bpc + '55' }]}><Text style={[styles.badT, { color: bpc }]}>FASE {state.boss.phase}</Text></View>}
+              </View>
+              <StatBar current={state.boss.hp} max={state.boss.maxHp} color={bpc} label="HP" />
+              <View style={styles.atbTrack}><View style={[styles.atbFill, { width: state.phase === 'boss_turn' ? '100%' : '30%', backgroundColor: bpc }]} /></View>
+              <StatusChips effects={state.boss.statusEffects} />
+              <View style={[styles.center, { marginTop: 40 }]}>
+                <AnimatedSprite spriteUrl={state.boss.sprite} onHit={state.phase === 'boss_turn'} sizeScale={1.8} shakeAnim={enemyShake} />
               </View>
             </View>
-            <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
-            <StatBar current={state.player.mana} max={state.player.maxMana} color="#3b82f6" label="MP" />
-            {/* ATB Player */}
-            <View style={styles.atbTrack}>
-              <View style={[styles.atbFill, { width: state.phase === 'player_turn' ? '100%' : '10%', backgroundColor: '#22c55e' }]} />
+          </View>
+
+          {/* CENTER: ARENA & LOG & ACTIONS */}
+          <View style={styles.centerCol}>
+            {state.phase === 'player_turn' && state.telegraphMsg && (
+              <Animated.View entering={FadeInUp} style={styles.telegraphBanner}>
+                 <Ionicons name="warning" size={14} color="#EF4444" />
+                 <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
+              </Animated.View>
+            )}
+            <View style={[styles.log, { height: 120, marginBottom: 16 }]}>
+              <ScrollView ref={ref => ref?.scrollToEnd()} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+                {state.log.slice(-5).map((m, i) => (
+                  <Text key={i} style={[styles.logT, i < 4 && { opacity: 0.5, fontSize: 11 }]}>{m.message}</Text>
+                ))}
+              </ScrollView>
+            </View>
+            <View style={styles.desktopArena}>
+              <View style={styles.turn}><Text style={styles.turnT}>TURNO {state.turn}</Text></View>
+            </View>
+            <View style={styles.actions}>
+              {state.phase === 'player_turn' && !busy ? (
+                <>
+                  <View style={styles.aRow}>
+                    <ActionBtn label="ATACAR" icon="flash" color="#ef4444" onPress={() => handleAction({ type: 'ATTACK' })} disabled={frozen} showDurability />
+                    <ActionBtn label="DEFENDER" icon="shield" color="#3b82f6" onPress={() => handleAction({ type: 'DEFEND' })} disabled={frozen} />
+                  </View>
+                  <View style={styles.aRow}>
+                    {state.player.skills.slice(0, 1).map(s => <ActionBtn key={s.id} label={s.name} icon="sparkles" sub={`${s.manaCost}MP`} color="#a855f7" onPress={() => handleAction({ type: 'SKILL', skillId: s.id })} disabled={frozen || state.player.mana < s.manaCost} />)}
+                    <ActionBtn label="BOLSA" icon="briefcase" color="#A855F7" onPress={() => setShowBag(true)} />
+                  </View>
+                </>
+              ) : <View style={styles.wait}><Text style={styles.waitT}>TURNO ENEMIGO...</Text></View>}
+            </View>
+          </View>
+
+          {/* RIGHT: PLAYER */}
+          <View style={styles.sideCol}>
+            <View style={[styles.box, { flex: 1 }]}>
+               <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <CharacterAvatar 
+                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')} 
+                  isAttacking={isHeroAttacking}
+                  isTakingDamage={isHeroHit}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.pName}>{state.player.name}</Text>
+                <View style={styles.comboRow}>
+                  {[1,2,3,4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
+                </View>
+              </View>
+              <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
+              <StatBar current={state.player.mana} max={state.player.maxMana} color="#3b82f6" label="MP" />
+              <View style={styles.atbTrack}><View style={[styles.atbFill, { width: state.phase === 'player_turn' ? '100%' : '10%', backgroundColor: '#22c55e' }]} /></View>
+              <StatusChips effects={state.player.statusEffects} />
             </View>
           </View>
         </View>
-        <StatusChips effects={state.player.statusEffects} />
-      </View>
-
-      {/* Log Multilínea — Mejorado */}
-      <View style={styles.log}>
-        <ScrollView 
-          ref={ref => ref?.scrollToEnd()} 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
-        >
-          {state.log.slice(-3).map((m, i) => (
-            <Text key={i} style={[styles.logT, i < 2 && { opacity: 0.5, fontSize: 10 }]}>
-              {m.message}
-            </Text>
-          ))}
-        </ScrollView>
-      </View>
-
-      <View style={styles.actions}>
-        {state.phase === 'player_turn' && !busy ? (
-          <>
-            <View style={styles.aRow}>
-              <ActionBtn label="ATACAR" icon="flash" color="#ef4444" onPress={() => handleAction({ type: 'ATTACK' })} disabled={frozen} showDurability />
-              <ActionBtn label="DEFENDER" icon="shield" color="#3b82f6" onPress={() => handleAction({ type: 'DEFEND' })} disabled={frozen} />
+      ) : (
+        <>
+          {/* MOBILE: ENEMY TOP */}
+          <View style={[styles.box, { borderColor: bpc + '44', marginTop: 10 }]}>
+            {state.phase === 'player_turn' && state.telegraphMsg && (
+              <Animated.View entering={FadeInUp} style={styles.telegraphBanner}>
+                <Ionicons name="warning" size={14} color="#EF4444" />
+                <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
+              </Animated.View>
+            )}
+            <View style={styles.row}>
+              <Text style={[styles.name, { color: bpc }]}>{state.boss.name}</Text>
+              {state.boss.debtAmount > 0 && <View style={[styles.badge, { backgroundColor: bpc + '15', borderColor: bpc + '55' }]}><Text style={[styles.badT, { color: bpc }]}>FASE {state.boss.phase}</Text></View>}
             </View>
-            <View style={styles.aRow}>
-              {state.player.skills.slice(0, 1).map(s => <ActionBtn key={s.id} label={s.name} icon="sparkles" sub={`${s.manaCost}MP`} color="#a855f7" onPress={() => handleAction({ type: 'SKILL', skillId: s.id })} disabled={frozen || state.player.mana < s.manaCost} />)}
-              <ActionBtn label="BOLSA" icon="briefcase" color="#A855F7" onPress={() => setShowBag(true)} />
+            <StatBar current={state.boss.hp} max={state.boss.maxHp} color={bpc} label="HP" />
+            <View style={styles.atbTrack}><View style={[styles.atbFill, { width: state.phase === 'boss_turn' ? '100%' : '30%', backgroundColor: bpc }]} /></View>
+            <StatusChips effects={state.boss.statusEffects} />
+            <View style={styles.center}>
+              <AnimatedSprite spriteUrl={state.boss.sprite} onHit={state.phase === 'boss_turn'} sizeScale={1.2} shakeAnim={enemyShake} />
             </View>
-          </>
-        ) : <View style={styles.wait}><Text style={styles.waitT}>TURNO ENEMIGO...</Text></View>}
-      </View>
+          </View>
 
+          {/* MOBILE: LOG MIDDLE */}
+          <View style={[styles.log, { height: 70 }]}>
+            <ScrollView ref={ref => ref?.scrollToEnd()} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+              {state.log.slice(-3).map((m, i) => (
+                <Text key={i} style={[styles.logT, i < 2 && { opacity: 0.5, fontSize: 10 }]}>{m.message}</Text>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* MOBILE: PLAYER BOTTOM */}
+          <View style={styles.box}>
+            <View style={styles.row}>
+              <View style={{ alignItems: 'center' }}>
+                <CharacterAvatar 
+                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')} 
+                  isAttacking={isHeroAttacking}
+                  isTakingDamage={isHeroHit}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 15 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.pName}>{state.player.name}</Text>
+                  <View style={styles.comboRow}>
+                    {[1,2,3,4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
+                  </View>
+                </View>
+                <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
+                <StatBar current={state.player.mana} max={state.player.maxMana} color="#3b82f6" label="MP" />
+                <View style={styles.atbTrack}><View style={[styles.atbFill, { width: state.phase === 'player_turn' ? '100%' : '10%', backgroundColor: '#22c55e' }]} /></View>
+              </View>
+            </View>
+            <StatusChips effects={state.player.statusEffects} />
+          </View>
+
+          <View style={styles.actions}>
+            {state.phase === 'player_turn' && !busy ? (
+              <>
+                <View style={styles.aRow}>
+                  <ActionBtn label="ATACAR" icon="flash" color="#ef4444" onPress={() => handleAction({ type: 'ATTACK' })} disabled={frozen} showDurability />
+                  <ActionBtn label="DEFENDER" icon="shield" color="#3b82f6" onPress={() => handleAction({ type: 'DEFEND' })} disabled={frozen} />
+                </View>
+                <View style={styles.aRow}>
+                  {state.player.skills.slice(0, 1).map(s => <ActionBtn key={s.id} label={s.name} icon="sparkles" sub={`${s.manaCost}MP`} color="#a855f7" onPress={() => handleAction({ type: 'SKILL', skillId: s.id })} disabled={frozen || state.player.mana < s.manaCost} />)}
+                  <ActionBtn label="BOLSA" icon="briefcase" color="#A855F7" onPress={() => setShowBag(true)} />
+                </View>
+              </>
+            ) : <View style={styles.wait}><Text style={styles.waitT}>TURNO ENEMIGO...</Text></View>}
+          </View>
+        </>
+      )}
+
+      {/* OVERLAYS */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {damageNumbers.map(e => <DamageNumber key={e.id} id={e.id} amount={e.amount} kind={e.kind} x={SCREEN_W * 0.5} y={e.target === 'enemy' ? SCREEN_H * 0.3 : SCREEN_H * 0.6} onFinish={clearDamageEvent} />)}
       </View>
@@ -526,7 +561,6 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
         }} />)}
       </View>
 
-      {/* ── BAG OVERLAY ── */}
       {showBag && (
         <Animated.View entering={FadeIn} exiting={FadeOut} style={uiStyles.bagOverlay}>
           <View style={uiStyles.bagBox}>
@@ -564,7 +598,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 12 },
   vol: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff10', padding: 6, borderRadius: 10, gap: 6 },
   volT: { color: '#ffffff60', fontSize: 10, width: 26, textAlign: 'center' },
-  turn: { backgroundColor: '#4f46e520', borderWidth: 1, borderColor: '#6366f160', paddingHorizontal: 12, borderRadius: 8, justifyContent: 'center' },
+  turn: { backgroundColor: '#4f46e520', borderWidth: 1, borderColor: '#6366f160', paddingHorizontal: 12, borderRadius: 8, justifyContent: 'center', height: 24 },
   turnT: { color: '#818cf8', fontWeight: '900', fontSize: 10 },
   exit: { backgroundColor: '#ef444420', borderWidth: 1, borderColor: '#ef444450', paddingHorizontal: 10, borderRadius: 8, justifyContent: 'center' },
   exitT: { color: '#f87171', fontWeight: '700', fontSize: 10 },
@@ -581,8 +615,6 @@ const styles = StyleSheet.create({
   aRow: { flexDirection: 'row', gap: 8 },
   wait: { height: 60, justifyContent: 'center', alignItems: 'center' },
   waitT: { color: '#ffffff40', fontWeight: '900', letterSpacing: 1 },
-
-  // Nuevos estilos Premium
   telegraphBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: 'rgba(239,68,68,0.1)',
@@ -591,13 +623,16 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   telegraphT: { color: '#ef4444', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  
-  atbTrack: { height: 3, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 2, marginTop: 4, overflow: 'hidden' },
+  atbTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 2, marginTop: 4, overflow: 'hidden' },
   atbFill:  { height: '100%', borderRadius: 2 },
-
   comboRow: { flexDirection: 'row', gap: 4 },
   comboDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   comboDotActive: { backgroundColor: '#FFD700', borderColor: '#DAA520' },
+  // DESKTOP
+  desktopLayout: { flex: 1, flexDirection: 'row', paddingHorizontal: 20, gap: 20, paddingBottom: 20 },
+  sideCol: { flex: 0.3, justifyContent: 'flex-start' },
+  centerCol: { flex: 0.4, justifyContent: 'flex-start' },
+  desktopArena: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });
 
 const barStyles = StyleSheet.create({

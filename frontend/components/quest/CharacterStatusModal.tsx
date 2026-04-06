@@ -288,135 +288,133 @@ export const CharacterStatusModal = ({
           </View>
 
           {/* ── Hero Card ────────────────────────────────────────────────── */}
-          <GestureHandlerRootView style={{ width: '100%' }}>
-            <GestureDetector gesture={pan}>
-              <View style={cs.cardZone}>
-                {hero && (
-                  <Animated.View
-                    style={[
-                      cs.heroCard,
-                      { borderColor: accent + '60', shadowColor: accent },
-                      cardAnim,
-                    ]}
-                  >
-                    {/* Tinted glow bg */}
-                    <View style={[StyleSheet.absoluteFill, { backgroundColor: accent + '08' }]} />
-
-                    {/* Flash overlay on navigate */}
-                    <Animated.View style={[StyleSheet.absoluteFill, flashAnim]} pointerEvents="none" />
-
-                    {/* Left: Sprite */}
-                    <View style={[cs.spriteCol, { borderRightColor: accent + '22' }]}>
-                      <Image
-                        source={(CHAR_SPRITES as any)[hero.id]}
-                        style={[cs.sprite, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
-                        contentFit="contain"
-                      />
-                      {/* Active badge con shimmer */}
-                      {hero.id === activeHeroId
-                        ? <ShimmerBadge accent={accent} />
-                        : null
-                      }
-                    </View>
-
-                    {/* Right: Info */}
-                    <View style={cs.infoCol}>
-                      {elemInfo && (
-                        <View style={[cs.elemTag, { backgroundColor: elemInfo.color + '1a', borderColor: elemInfo.color + '44' }]}>
-                          <Text style={[cs.elemTagTxt, { color: elemInfo.color }]}>{elemInfo.emoji} {elemInfo.label}</Text>
-                        </View>
-                      )}
-                      <Text style={[cs.heroName, { color: accent }]}>{hero.name}</Text>
-                      <Text style={cs.heroSubtitle}>{hero.subtitle}</Text>
-
-                      <View style={cs.statTypeRow}>
-                        <MaterialCommunityIcons name="star-four-points" size={10} color={accent} />
-                        <Text style={[cs.statType, { color: accent + 'cc' }]}>{hero.stat}</Text>
-                      </View>
-
-                      <View style={[cs.bonusBox, { borderLeftColor: accent }]}>
-                        <Text style={cs.bonusTxt}>{hero.bonus}</Text>
-                      </View>
-
-                      {unlocked[idx]?.id !== activeHeroId ? (
-                        <TouchableOpacity
-                          style={[cs.selectBtn, { borderColor: accent + '55', backgroundColor: accent + '15' }]}
-                          onPress={() => onSelectHero(unlocked[idx])}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[cs.selectBtnTxt, { color: accent }]}>Seleccionar</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <View style={cs.selectedLabel}>
-                          <Ionicons name="checkmark-circle" size={12} color={accent} />
-                          <Text style={[cs.selectedLabelTxt, { color: accent }]}>Seleccionado</Text>
-                        </View>
-                      )}
-                    </View>
-                  </Animated.View>
-                )}
-
-                {/* ── Swipe hint ─────────────────────────────────────────── */}
-                {showSwipeHint && (
-                  <Animated.View
-                    entering={FadeIn.duration(300)}
-                    exiting={FadeOut.duration(400)}
-                    style={cs.swipeHint}
-                  >
-                    <Text style={cs.swipeHintTxt}>← Desliza para explorar →</Text>
-                  </Animated.View>
-                )}
-              </View>
-            </GestureDetector>
-
-            {/* ── Navigation bar ───────────────────────────────────────── */}
-            <View style={cs.navRow}>
-              <TouchableOpacity onPress={() => navigate(-1)} disabled={idx === 0} style={cs.navArrow}>
-                <Ionicons name="chevron-back" size={18} color={idx === 0 ? 'rgba(255,255,255,0.2)' : '#fff'} />
-              </TouchableOpacity>
-
-              <View style={cs.dotsCol}>
-                <View style={cs.dots}>
-                  {unlocked.map((h, i) => {
-                    const a = HERO_ACCENT[h.id] ?? '#818cf8';
-                    const active = i === idx;
-                    return (
-                      <TouchableOpacity key={h.id} onPress={() => goTo(i)}>
-                        <View style={[
-                          cs.dot,
-                          active && {
-                            backgroundColor: a,
-                            width: 18,
-                            borderRadius: 4,
-                            shadowColor: a,
-                            shadowOpacity: 0.9,
-                            shadowRadius: 6,
-                            elevation: 4,
-                          },
-                        ]} />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {/* Hero name label — Wrapped in View to avoid opacity warning */}
+          <GestureDetector gesture={pan}>
+            <View style={cs.cardZone}>
+              {hero && (
                 <Animated.View
-                  key={hero?.id}
-                  entering={FadeIn.duration(200)}
-                  exiting={FadeOut.duration(150)}
+                  style={[
+                    cs.heroCard,
+                    { borderColor: accent + '60', shadowColor: accent },
+                    cardAnim,
+                  ]}
                 >
-                  <Animated.Text style={[cs.heroNameLabel, { color: accent }]}>
-                    {hero?.name ?? ''}
-                  </Animated.Text>
+                  {/* Tinted glow bg */}
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: accent + '08' }]} />
+
+                  {/* Flash overlay on navigate */}
+                  <Animated.View style={[StyleSheet.absoluteFill, flashAnim]} pointerEvents="none" />
+
+                  {/* Left: Sprite */}
+                  <View style={[cs.spriteCol, { borderRightColor: accent + '22' }]}>
+                    <Image
+                      source={(CHAR_SPRITES as any)[hero.id]}
+                      style={[cs.sprite, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
+                      contentFit="contain"
+                    />
+                    {/* Active badge con shimmer */}
+                    {hero.id === activeHeroId
+                      ? <ShimmerBadge accent={accent} />
+                      : null
+                    }
+                  </View>
+
+                  {/* Right: Info */}
+                  <View style={cs.infoCol}>
+                    {elemInfo && (
+                      <View style={[cs.elemTag, { backgroundColor: elemInfo.color + '1a', borderColor: elemInfo.color + '44' }]}>
+                        <Text style={[cs.elemTagTxt, { color: elemInfo.color }]}>{elemInfo.emoji} {elemInfo.label}</Text>
+                      </View>
+                    )}
+                    <Text style={[cs.heroName, { color: accent }]}>{hero.name}</Text>
+                    <Text style={cs.heroSubtitle}>{hero.subtitle}</Text>
+
+                    <View style={cs.statTypeRow}>
+                      <MaterialCommunityIcons name="star-four-points" size={10} color={accent} />
+                      <Text style={[cs.statType, { color: accent + 'cc' }]}>{hero.stat}</Text>
+                    </View>
+
+                    <View style={[cs.bonusBox, { borderLeftColor: accent }]}>
+                      <Text style={cs.bonusTxt}>{hero.bonus}</Text>
+                    </View>
+
+                    {unlocked[idx]?.id !== activeHeroId ? (
+                      <TouchableOpacity
+                        style={[cs.selectBtn, { borderColor: accent + '55', backgroundColor: accent + '15' }]}
+                        onPress={() => onSelectHero(unlocked[idx])}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[cs.selectBtnTxt, { color: accent }]}>Seleccionar</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={cs.selectedLabel}>
+                        <Ionicons name="checkmark-circle" size={12} color={accent} />
+                        <Text style={[cs.selectedLabelTxt, { color: accent }]}>Seleccionado</Text>
+                      </View>
+                    )}
+                  </View>
                 </Animated.View>
-              </View>
+              )}
 
-              <TouchableOpacity onPress={() => navigate(1)} disabled={idx === unlocked.length - 1} style={cs.navArrow}>
-                <Ionicons name="chevron-forward" size={18} color={idx === unlocked.length - 1 ? 'rgba(255,255,255,0.2)' : '#fff'} />
-              </TouchableOpacity>
-
-              <Text style={cs.indexTxt}>{idx + 1}/{unlocked.length}</Text>
+              {/* ── Swipe hint ─────────────────────────────────────────── */}
+              {showSwipeHint && (
+                <Animated.View
+                  entering={FadeIn.duration(300)}
+                  exiting={FadeOut.duration(400)}
+                  style={cs.swipeHint}
+                >
+                  <Text style={cs.swipeHintTxt}>← Desliza para explorar →</Text>
+                </Animated.View>
+              )}
             </View>
-          </GestureHandlerRootView>
+          </GestureDetector>
+
+          {/* ── Navigation bar ───────────────────────────────────────── */}
+          <View style={cs.navRow}>
+            <TouchableOpacity onPress={() => navigate(-1)} disabled={idx === 0} style={cs.navArrow}>
+              <Ionicons name="chevron-back" size={18} color={idx === 0 ? 'rgba(255,255,255,0.2)' : '#fff'} />
+            </TouchableOpacity>
+
+            <View style={cs.dotsCol}>
+              <View style={cs.dots}>
+                {unlocked.map((h, i) => {
+                  const a = HERO_ACCENT[h.id] ?? '#818cf8';
+                  const active = i === idx;
+                  return (
+                    <TouchableOpacity key={h.id} onPress={() => goTo(i)}>
+                      <View style={[
+                        cs.dot,
+                        active && {
+                          backgroundColor: a,
+                          width: 18,
+                          borderRadius: 4,
+                          shadowColor: a,
+                          shadowOpacity: 0.9,
+                          shadowRadius: 6,
+                          elevation: 4,
+                        },
+                      ]} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {/* Hero name label — Wrapped in View to avoid opacity warning */}
+              <Animated.View
+                key={hero?.id}
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(150)}
+              >
+                <Animated.Text style={[cs.heroNameLabel, { color: accent }]}>
+                  {hero?.name ?? ''}
+                </Animated.Text>
+              </Animated.View>
+            </View>
+
+            <TouchableOpacity onPress={() => navigate(1)} disabled={idx === unlocked.length - 1} style={cs.navArrow}>
+              <Ionicons name="chevron-forward" size={18} color={idx === unlocked.length - 1 ? 'rgba(255,255,255,0.2)' : '#fff'} />
+            </TouchableOpacity>
+
+            <Text style={cs.indexTxt}>{idx + 1}/{unlocked.length}</Text>
+          </View>
 
           {/* ── Divider dorado ────────────────────────────────────────────── */}
           <View style={cs.dividerRow}>

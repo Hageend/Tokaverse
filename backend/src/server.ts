@@ -2,7 +2,15 @@ import Fastify from 'fastify';
 import { Server } from 'socket.io';
 import { leagueRoutes } from './leagueRoutes';
 
+import cors from '@fastify/cors';
+
 const fastify = Fastify({ logger: true });
+
+// Registrar CORS globalmente para habilitar la web
+fastify.register(cors, {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
+});
 
 fastify.get('/status', async () => {
     return { status: 'TokaVerse API Running', version: '1.0.0' };

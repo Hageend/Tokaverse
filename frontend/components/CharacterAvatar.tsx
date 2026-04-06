@@ -75,12 +75,14 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
     <View style={styles.container}>
       <View style={styles.shadow} />
       <Animated.View style={[styles.spriteWrapper, animatedStyles]}>
-        <Image
-          source={typeof spriteUrl === 'number' ? spriteUrl : { uri: spriteUrl }}
-          style={[styles.sprite, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
-          contentFit="contain"
-          cachePolicy="memory-disk"
-        />
+        {spriteUrl ? (
+          <Image
+            source={typeof spriteUrl === 'string' ? { uri: spriteUrl } : spriteUrl}
+            style={[styles.sprite, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+          />
+        ) : null}
       </Animated.View>
     </View>
   );

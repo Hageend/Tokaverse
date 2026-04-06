@@ -1,488 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Text, StyleSheet, ScrollView, View, TouchableOpacity, ActivityIndicator, Alert, Platform, Animated } from 'react-native';
+import { Text, StyleSheet, ScrollView, View, TouchableOpacity, ActivityIndicator, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Colors } from '../../constants/Colors';
 import { io, Socket } from 'socket.io-client';
-import LottieView from 'lottie-react-native';
+import LottieView from '../../components/LottieWrapper';
 import Constants from 'expo-constants';
 import { LeagueRanking } from '../../components/league/LeagueRanking';
 import { ProgressMap, MapNode, MapMission } from '../../components/league/ProgressMap';
 import { LeagueJoinModal } from '../../components/league/LeagueJoinModal';
 
-interface UserProfile {
-  id: string;
-  xp: number;
-  level: number;
-}
-
-interface League {
-  id: string;
-  name: string;
-  description: string;
-  tier: 'cobre' | 'plata' | 'oro' | 'estrella';
-  level: number;
-  minLevel: number;
-  users: string[];
-  ranking: UserLeagueStats[];
-  endDate?: number;
-}
-
-interface UserLeagueStats {
-  userId: string;
-  leagueId: string;
-  points: number;
-  position: number;
-  rewards: string[];
-  xp?: number;
-  xpToNext?: number;
-}
-
-const LEAGUE_ASSETS: Record<string, any> = {
-  cobre: require('../../assets/images/coin_cobre.png'),
-  plata: require('../../assets/images/coin_plata.png'),
-  oro: require('../../assets/images/coin_oro.png'),
-  estrella: require('../../assets/images/coin_estrella.png')
-};
-
-const USER_ID = 'user_123'; // Usuario Simulado
-
-const getApiUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-  let host = Constants.expoConfig?.hostUri?.split(':')[0];
-  if (!host || host === 'localhost' || host === '127.0.0.1') {
-    if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000';
-  }
-  return `http://${host}:3000`;
-};
-
-const API_URL = getApiUrl();
-
-const QUESTS = [
-  { id: 'q_despensa', name: '🛒 Compra TokaDespensa', points: 100 },
-  { id: 'q_digital',   name: '📺 Pago Suscripción',    points: 150 },
-  { id: 'q_connect',   name: '📋 Validar Ticket Fiscal', points: 200 },
-  { id: 'q_total',     name: '💰 Abono de Nómina',     points: 300 }
-];
-
-const MAP_NODES: MapNode[] = [
-  { id: 1, label: 'Inicio',      icon: '🏠', x: 170, y: 390, state: 'done'   },
-  { id: 2, label: 'Primer pago', icon: '💳', x: 255, y: 330, state: 'done'   },
-  { id: 3, label: 'Despensa',    icon: '🛒', x: 130, y: 275, state: 'done'   },
-  { id: 4, label: 'Streaming',   icon: '📺', x: 230, y: 215, state: 'active' },
-  { id: 5, label: 'Boss',        icon: '⚔️', x: 120, y: 160, state: 'locked' },
-  { id: 6, label: 'Nómina',      icon: '💰', x: 240, y: 100, state: 'locked' },
-  { id: 7, label: 'Leyenda',     icon: '👑', x: 170, y: 44,  state: 'locked' },
-];
-
-const LEAGUE_MISSIONS: MapMission[] = [
-  { id: 'm1', icon: '💳', name: 'Ingresa $100 MXN',              xp: 50,  done: true  },
-  { id: 'm2', icon: '🛒', name: 'Realiza 3 compras con TokaPay', xp: 150, done: false },
-  { id: 'm3', icon: '📺', name: 'Paga una suscripción digital',  xp: 120, done: false },
-  { id: 'm4', icon: '⚔️', name: 'Derrota a un boss',             xp: 500, done: false },
-  { id: 'm5', icon: '💰', name: 'Recibe tu nómina en TokaPay',   xp: 300, done: false },
-];
-
-export default function LeagueScreen() {
-  const [leagues, setLeagues] = useState<League[]>([]);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [expandedLeague, setExpandedLeague] = useState<string | null>(null);
-  
-  const [timeRemaining, setTimeRemaining] = useState<Record<string, string>>({});
-  const confettiRef = useRef<LottieView>(null);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
-  const socketRef = useRef<Socket | null>(null);
-
-  const handleNetworkError = (err: any) => {
-    console.error('Network Error:', err);
-    Alert.alert(
-      'Fallo de Red Local',
-      `No se pudo alcanzar el backend alojado en:\n${API_URL}\n\nSi estás probando desde un celular, revisa tu conexión o el Firewall local.`
-    );
-  };
-
-  const fetchInitialData = async () => {
-    try {
-      // 1. Cargar Perfil de Usuario
-      const userRes = await fetch(`${API_URL}/users/${USER_ID}/profile`);
-      if (userRes.ok) {
-         setUserProfile(await userRes.json());
-      }
-      
-      // 2. Cargar Ligas Guardadas
-      const leagueRes = await fetch(`${API_URL}/leagues`);
-      if (!leagueRes.ok) throw new Error('Servidor de Ligas falló');
-      setLeagues(await leagueRes.json());
-
-    } catch (err) {
-      handleNetworkError(err);
-      setLeagues([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchInitialData();
-
-    // Sockets Reactivos Globales
-    const socket = io(API_URL);
-    socketRef.current = socket;
-
-    socket.on('leagueUpdated', (updatedLeague: League) => {
-      setLeagues(prevLeagues => 
-        prevLeagues.map(l => l.id === updatedLeague.id ? updatedLeague : l)
-      );
-    });
-
-    socket.on('userUpdated', (updatedProfile: UserProfile) => {
-       if (updatedProfile.id === USER_ID) {
-          setUserProfile(updatedProfile);
-       }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const newTimes: Record<string, string> = {};
-      const now = Date.now();
-      leagues.forEach(l => {
-        if (l.endDate) {
-          const diff = l.endDate - now;
-          if (diff <= 0) {
-            newTimes[l.id] = 'Torneo Finalizado';
-          } else {
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-            const minutes = Math.floor((diff / 1000 / 60) % 60);
-            const seconds = Math.floor((diff / 1000) % 60);
-            newTimes[l.id] = `${days}d ${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
-          }
-        }
-      });
-      setTimeRemaining(newTimes);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [leagues]);
-
-  const handleSimulateTransaction = async (amountXp: number, source: string) => {
-    try {
-      const res = await fetch(`${API_URL}/users/${USER_ID}/transaction`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amountXp, source })
-      });
-      const data = await res.json();
-      if (!data.success) {
-        Alert.alert('Aviso', data.message);
-      } else if (data.msg) {
-        Alert.alert('Tokaverse Info', data.msg);
-      }
-    } catch (err) {
-      handleNetworkError(err);
-    }
-  };
-
-  const handleJoin = async (leagueId: string) => {
-    try {
-      const res = await fetch(`${API_URL}/leagues/${leagueId}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID })
-      });
-      const data = await res.json();
-      if (!data.success) {
-         Alert.alert('Alerta', data.message);
-      } else {
-        // Mostrar animación de bienvenida
-        const league = leagues.find(l => l.id === leagueId);
-        if (league) setJoinedLeague(league);
-      }
-    } catch (err) {
-      handleNetworkError(err);
-    }
-  };
-
-  const handleCompleteQuest = async (leagueId: string, questId: string, points: number) => {
-    try {
-      const res = await fetch(`${API_URL}/leagues/${leagueId}/quests/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, questId })
-      });
-      const data = await res.json();
-      if (!data.success) {
-        Alert.alert('Aviso', data.message);
-      } else {
-        Alert.alert('Éxito', data.message);
-      }
-    } catch (err) {
-      handleNetworkError(err);
-    }
-  };
-
-  const handleResolveTournament = async (leagueId: string) => {
-    try {
-      const res = await fetch(`${API_URL}/leagues/${leagueId}/resolve`, {
-        method: 'POST'
-      });
-      const data = await res.json();
-      if (data.success) {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
-        confettiRef.current?.play();
-      }
-    } catch (err) {
-      handleNetworkError(err);
-    }
-  };
-
-  if (loading || !userProfile) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-      </View>
-    );
-  }
-
-  // XP Progress Calculation logic for UI 
-  // Nivel 1: Ronin (0 -> 2.5k), Nivel 2: Genin (2.5k -> 10k), Nivel 3: Chunin (10k -> 35k), Nivel 4: Jonin (MAX)
-  const XP_THRESHOLDS = [0, 2500, 10000, 35000, 100000];
-  const currentThreshold = XP_THRESHOLDS[userProfile.level] || 35000;
-  const prevThreshold = XP_THRESHOLDS[userProfile.level - 1] || 0;
-  const progressPercent = userProfile.level >= 4 ? 100 : Math.min(100, Math.floor(((userProfile.xp - prevThreshold) / (currentThreshold - prevThreshold)) * 100));
-  const isMemberOfAny = leagues.some(l => l.users.includes(USER_ID));
-
-  return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      {/* Modal de bienvenida al unirse a una liga */}
-      <LeagueJoinModal
-        visible={joinedLeague !== null}
-        leagueName={joinedLeague?.name ?? ''}
-        tier={(joinedLeague?.tier ?? 'cobre') as any}
-        onClose={() => setJoinedLeague(null)}
-      />
-      {showConfetti && (
-        <View style={styles.confettiOverlay} pointerEvents="none">
-          <LottieView
-            ref={confettiRef}
-            source={require('../../assets/confetti.json')}
-            autoPlay loop={false} style={styles.lottie}
-          />
-        </View>
-      )}
-
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-        {/* ── HERO BANNER ─────────────────────────────────────────── */}
-        {isMemberOfAny ? (
-          // ── Miembro activo: mostrar info de liga e imagen ──────────
-          <View style={styles.heroBanner}>
-            {/* Imagen de la liga como hero art */}
-            <View style={styles.heroBannerImageRow}>
-              <View style={styles.heroCoinWrap}>
-                <Image
-                  source={LEAGUE_ASSETS[leagues.find(l => l.users.includes(USER_ID))?.tier ?? 'cobre']}
-                  style={styles.heroCoinLarge}
-                  contentFit="contain"
-                />
-                <View style={styles.heroCoinGlow} />
-              </View>
-              <View style={styles.heroBannerLeft}>
-                <Text style={styles.heroBannerEyebrow}>LIGA ACTIVA</Text>
-                <Text style={styles.heroBannerTitle} numberOfLines={1}>
-                  {leagues.find(l => l.users.includes(USER_ID))?.name ?? 'TOKA LIGAS'}
-                </Text>
-                <Text style={styles.heroBannerSub}>Supera misiones · Sube de nivel</Text>
-                <View style={styles.levelBadgeInline}>
-                  <Text style={styles.levelBadgeInlineTxt}>NIV. {userProfile.level}</Text>
-                </View>
-              </View>
-            </View>
-            {/* XP Bar */}
-            <View style={styles.xpRow}>
-              <Text style={styles.xpLabel}>XP {userProfile.xp.toLocaleString()}</Text>
-              <Text style={styles.xpLabel}>{currentThreshold.toLocaleString()}</Text>
-            </View>
-            <View style={styles.progressBarBg}>
-              <Animated.View style={[styles.progressBarFill, { width: `${progressPercent}%` as any }]} />
-            </View>
-            <Text style={styles.xpThresholdCaption}>
-              Faltan {Math.max(0, currentThreshold - userProfile.xp).toLocaleString()} XP para el próximo rango
-            </Text>
-          </View>
-        ) : (
-          // ── No miembro: CTA para unirse ────────────────────────────
-          <View style={styles.heroBannerCTA}>
-            <Text style={styles.ctaTitle}>🏆 TOKA LIGAS</Text>
-            <Text style={styles.ctaSub}>¡Únete a una liga, completa misiones y sube de rango!</Text>
-            <View style={styles.ctaTierRow}>
-              {(['cobre', 'plata', 'oro', 'estrella'] as const).map(tier => (
-                <Image key={tier} source={LEAGUE_ASSETS[tier]} style={styles.ctaTierCoin} contentFit="contain" />
-              ))}
-            </View>
-            <Text style={styles.ctaHint}>👇 Selecciona una liga abajo para comenzar</Text>
-          </View>
-        )}
-
-        {/* ── SIMULADORES (Solo si es miembro) ─────────────────────── */}
-        {isMemberOfAny && (
-          <>
-            <Text style={styles.sectionTitle}>⚡ Misiones Rápidas</Text>
-            <View style={styles.txnGrid}>
-              <TouchableOpacity style={[styles.txnChip, { borderColor: 'rgba(34,197,94,0.4)' }]} onPress={() => handleSimulateTransaction(100, 'Toka Despensa')}>
-                <Text style={styles.txnChipEmoji}>🛍</Text>
-                <Text style={[styles.txnChipTxt, { color: '#4ADE80' }]}>Despensa{'\n'}+100 XP</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.txnChip, { borderColor: 'rgba(59,130,246,0.4)' }]} onPress={() => handleSimulateTransaction(150, 'Suscripción Digital')}>
-                <Text style={styles.txnChipEmoji}>📺</Text>
-                <Text style={[styles.txnChipTxt, { color: '#60A5FA' }]}>Streaming{'\n'}+150 XP</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.txnChip, { borderColor: 'rgba(168,85,247,0.4)' }]} onPress={() => handleSimulateTransaction(200, 'Toka Connect')}>
-                <Text style={styles.txnChipEmoji}>📋</Text>
-                <Text style={[styles.txnChipTxt, { color: '#C084FC' }]}>Validación{'\n'}+200 XP</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-
-        {/* ─── MAPA DE PROGRESO (Solo si es miembro) ──────────────── */}
-        {isMemberOfAny && (
-          <>
-            <Text style={styles.sectionTitle}>🗺️ Mapa de Progreso</Text>
-            <ProgressMap
-              nodes={MAP_NODES}
-              missions={LEAGUE_MISSIONS}
-              xpPercent={progressPercent}
-              leagueName={leagues.find(l => l.users.includes(USER_ID))?.name ?? 'BRONCE MÍTICO'}
-              xpLabel={`${userProfile.xp} / ${currentThreshold} XP para el siguiente rango`}
-              onMissionComplete={(id) => console.log('Mission done:', id)}
-            />
-          </>
-        )}
-
-        {/* ─── LIGAS ─────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>🏆 Ligas Activas</Text>
-        {leagues.length === 0 ? (
-          <Text style={styles.noLeagues}>No hay torneos disponibles.</Text>
-        ) : (
-          leagues.map((league) => {
-            const isMember   = league.users.includes(USER_ID);
-            const myStats    = league.ranking.find(r => r.userId === USER_ID);
-            const isExpanded = expandedLeague === league.id;
-            const isLocked   = userProfile.level < league.minLevel;
-
-            return (
-              <View key={league.id} style={[styles.leagueCard, isLocked && styles.leagueLocked]}>
-
-                {/* Timer Ribbon */}
-                {league.endDate && !isLocked && (
-                  <View style={styles.timerRibbon}>
-                    <Text style={styles.timerRibbonText}>⏳ {timeRemaining[league.id] || 'Calculando...'}</Text>
-                  </View>
-                )}
-
-                {/* Header row: coin + info + join */}
-                <View style={styles.cardHeader}>
-                  <View style={styles.coinWrapper}>
-                    <Image source={LEAGUE_ASSETS[league.tier] || LEAGUE_ASSETS.cobre} style={styles.coinImage} resizeMode="contain" />
-                  </View>
-                  <View style={styles.leagueInfoContainer}>
-                    <Text style={[styles.leagueName, isLocked && { color: Colors.textSecondary }]}>{league.name}</Text>
-                    <Text style={styles.leagueLevel}>🏅 Req. nivel {league.minLevel}</Text>
-                  </View>
-                  {!isMember && (
-                    <TouchableOpacity
-                      style={[styles.joinButton, isLocked && styles.joinButtonLocked]}
-                      onPress={() => handleJoin(league.id)}
-                      disabled={isLocked}
-                    >
-                      <Text style={[styles.joinButtonText, isLocked && styles.joinTextLocked]}>
-                        {isLocked ? '🔒' : 'Unirse'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  {isMember && (
-                    <View style={styles.memberBadge}>
-                      <Text style={styles.memberBadgeTxt}>✓ MIEMBRO</Text>
-                    </View>
-                  )}
-                </View>
-
-                <Text style={styles.leagueDesc}>{league.description}</Text>
-
-                {/* Stats row (if member) */}
-                {isMember && myStats && (
-                  <View style={styles.statsContainer}>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statLabel}>POSICIÓN</Text>
-                      <Text style={styles.statValue}>#{myStats.position}</Text>
-                    </View>
-                    <View style={[styles.statBox, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)', paddingLeft: 20 }]}>
-                      <Text style={styles.statLabel}>PUNTOS</Text>
-                      <Text style={styles.statValue}>{myStats.points}</Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* Quests */}
-                {isMember && (
-                  <View style={styles.questsContainer}>
-                    <Text style={styles.questsTitle}>Misiones de liga</Text>
-                    {QUESTS.map(q => (
-                      <TouchableOpacity
-                        key={q.id}
-                        style={styles.questRow}
-                        onPress={() => handleCompleteQuest(league.id, q.id, q.points)}
-                      >
-                        <Text style={styles.questName}>{q.name}</Text>
-                        <View style={styles.questBadge}>
-                          <Text style={styles.questPts}>+{q.points}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-
-                    <TouchableOpacity
-                      style={styles.toggleRankingButton}
-                      onPress={() => setExpandedLeague(isExpanded ? null : league.id)}
-                    >
-                      <Text style={styles.toggleRankingText}>
-                        {isExpanded ? '▲ Ocultar Ranking' : '▼ Ver Tabla de Clasificación'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* Ranking */}
-                {isExpanded && (
-                  <LeagueRanking
-                    ranking={league.ranking}
-                    currentUserId={USER_ID}
-                    tier={league.tier}
-                    leagueId={league.id}
-                    onResolve={handleResolveTournament}
-                  />
-                )}
-              </View>
-            );
-          })
-        )}
-
-        {/* Bottom spacer */}
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </View>
-  );
-}
-
-
-const styles = StyleSheet.create({
+// ─── ESTILOS CONSOLIDADOS ────────────────────────────────────────────────────
+const S = StyleSheet.create({
   container: { flex: 1 },
   content: {
     paddingHorizontal: 16,
@@ -490,6 +18,28 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
     flexGrow: 1,
   },
+  // -- Desktop Layout --
+  webLayout: {
+    flexDirection: 'row',
+    flex: 1,
+    height: '100%',
+    backgroundColor: 'transparent',
+  },
+  sidebar: {
+    width: 380,
+    padding: 24,
+    borderRightWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(15,23,42,0.3)',
+  },
+  mainPane: {
+    flex: 1,
+    padding: 24,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+
   // ── Hero Banner ──────────────────────────────────────────────
   heroBanner: {
     width: '100%',
@@ -612,6 +162,9 @@ const styles = StyleSheet.create({
   txnGrid: {
     flexDirection: 'row', gap: 12, marginBottom: 28,
   },
+  txnGridDesktop: {
+    flexDirection: 'column',
+  },
   txnChip: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -620,9 +173,18 @@ const styles = StyleSheet.create({
     alignItems: 'center', gap: 8,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
+  txnChipDesktop: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    justifyContent: 'flex-start',
+  },
   txnChipEmoji: { fontSize: 26 },
   txnChipTxt: {
     fontSize: 11, fontWeight: '800', textAlign: 'center', lineHeight: 15,
+  },
+  txnChipTxtDesktop: {
+    textAlign: 'left',
   },
   // ── Member badge ─────────────────────────────────────────────
   memberBadge: {
@@ -859,7 +421,7 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   questRow: {
-    backgroundColor: Colors.surfacePill,
+    backgroundColor: 'rgba(255,255,255,0.04)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -971,3 +533,500 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   }
 });
+
+interface UserProfile {
+  id: string;
+  xp: number;
+  level: number;
+}
+
+interface League {
+  id: string;
+  name: string;
+  description: string;
+  tier: 'cobre' | 'plata' | 'oro' | 'estrella';
+  level: number;
+  minLevel: number;
+  users: string[];
+  ranking: UserLeagueStats[];
+  endDate?: number;
+}
+
+interface UserLeagueStats {
+  userId: string;
+  leagueId: string;
+  points: number;
+  position: number;
+  rewards: string[];
+  xp?: number;
+  xpToNext?: number;
+}
+
+const LEAGUE_ASSETS: Record<string, any> = {
+  cobre: require('../../assets/images/coin_cobre.png'),
+  plata: require('../../assets/images/coin_plata.png'),
+  oro: require('../../assets/images/coin_oro.png'),
+  estrella: require('../../assets/images/coin_estrella.png')
+};
+
+const USER_ID = 'user_123'; // Usuario Simulado
+
+const getApiUrl = () => {
+  // 1. Prioridad: Variable de entorno explícita
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+  
+  // 2. Detección automática de Expo
+  const debuggerHost = Constants.expoConfig?.hostUri;
+  const address = debuggerHost?.split(':')[0];
+  if (address && address !== 'localhost' && address !== '127.0.0.1') {
+    return `http://${address}:3000`;
+  }
+  
+  // 3. Fallbacks robustos por IP local (detectados en tu PC)
+  if (Platform.OS !== 'web') {
+    return 'http://192.168.1.78:3000'; // IP Local Principal
+  }
+  
+  return 'http://localhost:3000';
+};
+
+const API_URL = getApiUrl();
+
+const QUESTS = [
+  { id: 'q_despensa', name: '🛒 Compra TokaDespensa', points: 100 },
+  { id: 'q_digital',   name: '📺 Pago Suscripción',    points: 150 },
+  { id: 'q_connect',   name: '📋 Validar Ticket Fiscal', points: 200 },
+  { id: 'q_total',     name: '💰 Abono de Nómina',     points: 300 }
+];
+
+const MAP_NODES: MapNode[] = [
+  { id: 1, label: 'Inicio',      icon: '🏠', x: 170, y: 390, state: 'done'   },
+  { id: 2, label: 'Primer pago', icon: '💳', x: 255, y: 330, state: 'done'   },
+  { id: 3, label: 'Despensa',    icon: '🛒', x: 130, y: 275, state: 'done'   },
+  { id: 4, label: 'Streaming',   icon: '📺', x: 230, y: 215, state: 'active' },
+  { id: 5, label: 'Boss',        icon: '⚔️', x: 120, y: 160, state: 'locked' },
+  { id: 6, label: 'Nómina',      icon: '💰', x: 240, y: 100, state: 'locked' },
+  { id: 7, label: 'Leyenda',     icon: '👑', x: 170, y: 44,  state: 'locked' },
+];
+
+const LEAGUE_MISSIONS: MapMission[] = [
+  { id: 'm1', icon: '💳', name: 'Ingresa $100 MXN',              xp: 50,  done: true  },
+  { id: 'm2', icon: '🛒', name: 'Realiza 3 compras con TokaPay', xp: 150, done: false },
+  { id: 'm3', icon: '📺', name: 'Paga una suscripción digital',  xp: 120, done: false },
+  { id: 'm4', icon: '⚔️', name: 'Derrota a un boss',             xp: 500, done: false },
+  { id: 'm5', icon: '💰', name: 'Recibe tu nómina en TokaPay',   xp: 300, done: false },
+];
+
+export default function LeagueScreen() {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
+
+  const [leagues, setLeagues] = useState<League[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedLeague, setExpandedLeague] = useState<string | null>(null);
+  
+  const [timeRemaining, setTimeRemaining] = useState<Record<string, string>>({});
+  const confettiRef = useRef<any>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+
+  const handleNetworkError = (err: any) => {
+    console.error('Network Error:', err);
+    Alert.alert(
+      'Fallo de Red Local',
+      `No se pudo alcanzar el backend alojado en:\n${API_URL}\n\nSi estás probando desde un celular, revisa tu conexión o el Firewall local.`
+    );
+  };
+
+  const fetchInitialData = async () => {
+    try {
+      // 1. Cargar Perfil de Usuario
+      const userRes = await fetch(`${API_URL}/users/${USER_ID}/profile`);
+      if (userRes.ok) {
+         setUserProfile(await userRes.json());
+      }
+      
+      // 2. Cargar Ligas Guardadas
+      const leagueRes = await fetch(`${API_URL}/leagues`);
+      if (!leagueRes.ok) throw new Error('Servidor de Ligas falló');
+      setLeagues(await leagueRes.json());
+
+    } catch (err) {
+      handleNetworkError(err);
+      setLeagues([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialData();
+
+    // Sockets Reactivos Globales
+    const socket = io(API_URL);
+    socketRef.current = socket;
+
+    socket.on('leagueUpdated', (updatedLeague: League) => {
+      setLeagues(prevLeagues => 
+        prevLeagues.map(l => l.id === updatedLeague.id ? updatedLeague : l)
+      );
+    });
+
+    socket.on('userUpdated', (updatedProfile: UserProfile) => {
+       if (updatedProfile.id === USER_ID) {
+          setUserProfile(updatedProfile);
+       }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newTimes: Record<string, string> = {};
+      const now = Date.now();
+      leagues.forEach(l => {
+        if (l.endDate) {
+          const diff = l.endDate - now;
+          if (diff <= 0) {
+            newTimes[l.id] = 'Torneo Finalizado';
+          } else {
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const minutes = Math.floor((diff / 1000 / 60) % 60);
+            const seconds = Math.floor((diff / 1000) % 60);
+            newTimes[l.id] = `${days}d ${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+          }
+        }
+      });
+      setTimeRemaining(newTimes);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [leagues]);
+
+  const handleSimulateTransaction = async (amountXp: number, source: string) => {
+    try {
+      const res = await fetch(`${API_URL}/users/${USER_ID}/transaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountXp, source })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        Alert.alert('Aviso', data.message);
+      } else if (data.msg) {
+        Alert.alert('Tokaverse Info', data.msg);
+      }
+    } catch (err) {
+      handleNetworkError(err);
+    }
+  };
+
+  const handleJoin = async (leagueId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/leagues/${leagueId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID })
+      });
+      const data = await res.json();
+      if (!data.success) {
+         Alert.alert('Alerta', data.message);
+      } else {
+        // Mostrar animación de bienvenida
+        const league = leagues.find(l => l.id === leagueId);
+        if (league) setJoinedLeague(league);
+      }
+    } catch (err) {
+      handleNetworkError(err);
+    }
+  };
+
+  const handleCompleteQuest = async (leagueId: string, questId: string, points: number) => {
+    try {
+      const res = await fetch(`${API_URL}/leagues/${leagueId}/quests/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, questId })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        Alert.alert('Aviso', data.message);
+      } else {
+        Alert.alert('Éxito', data.message);
+      }
+    } catch (err) {
+      handleNetworkError(err);
+    }
+  };
+
+  const handleResolveTournament = async (leagueId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/leagues/${leagueId}/resolve`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+        confettiRef.current?.play();
+      }
+    } catch (err) {
+      handleNetworkError(err);
+    }
+  };
+
+  if (loading || !userProfile) {
+    return (
+      <View style={[S.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color={Colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  // XP Progress Calculation logic for UI 
+  // Nivel 1: Ronin (0 -> 2.5k), Nivel 2: Genin (2.5k -> 10k), Nivel 3: Chunin (10k -> 35k), Nivel 4: Jonin (MAX)
+  const XP_THRESHOLDS = [0, 2500, 10000, 35000, 100000];
+  const currentThreshold = XP_THRESHOLDS[userProfile.level] || 35000;
+  const prevThreshold = XP_THRESHOLDS[userProfile.level - 1] || 0;
+  const progressPercent = userProfile.level >= 4 ? 100 : Math.min(100, Math.floor(((userProfile.xp - prevThreshold) / (currentThreshold - prevThreshold)) * 100));
+  const isMemberOfAny = leagues.some(l => l.users.includes(USER_ID));
+
+  const renderHeroBanner = () => (
+    isMemberOfAny ? (
+      <View style={S.heroBanner}>
+        <View style={S.heroBannerImageRow}>
+          <View style={S.heroCoinWrap}>
+            <Image
+              source={LEAGUE_ASSETS[leagues.find(l => l.users.includes(USER_ID))?.tier ?? 'cobre']}
+              style={S.heroCoinLarge}
+              contentFit="contain"
+            />
+            <View style={S.heroCoinGlow} />
+          </View>
+          <View style={S.heroBannerLeft}>
+            <Text style={S.heroBannerEyebrow}>LIGA ACTIVA</Text>
+            <Text style={S.heroBannerTitle} numberOfLines={1}>
+              {leagues.find(l => l.users.includes(USER_ID))?.name ?? 'TOKA LIGAS'}
+            </Text>
+            <Text style={S.heroBannerSub}>Supera misiones · Sube de nivel</Text>
+            <View style={S.levelBadgeInline}>
+              <Text style={S.levelBadgeInlineTxt}>NIV. {userProfile.level}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+          <Text style={S.xpLabel}>XP {userProfile.xp.toLocaleString()}</Text>
+          <Text style={S.xpLabel}>{currentThreshold.toLocaleString()}</Text>
+        </View>
+        <View style={S.progressBarBg}>
+          <Animated.View style={[S.progressBarFill, { width: `${progressPercent}%` as any }]} />
+        </View>
+        <Text style={S.xpThresholdCaption}>
+          Faltan {Math.max(0, currentThreshold - userProfile.xp).toLocaleString()} XP para el próximo rango
+        </Text>
+      </View>
+    ) : (
+      <View style={S.heroBannerCTA}>
+        <Text style={S.ctaTitle}>🏆 TOKA LIGAS</Text>
+        <Text style={S.ctaSub}>¡Únete a una liga, completa misiones y sube de rango!</Text>
+        <View style={S.ctaTierRow}>
+          {(['cobre', 'plata', 'oro', 'estrella'] as const).map(tier => (
+            <Image key={tier} source={LEAGUE_ASSETS[tier]} style={S.ctaTierCoin} contentFit="contain" />
+          ))}
+        </View>
+        <Text style={S.ctaHint}>👇 Selecciona una liga abajo para comenzar</Text>
+      </View>
+    )
+  );
+
+  const renderQuickMissions = () => isMemberOfAny && (
+    <>
+      <Text style={S.sectionTitle}>⚡ Misiones Rápidas</Text>
+      <View style={[S.txnGrid, isDesktop && S.txnGridDesktop]}>
+        <TouchableOpacity style={[S.txnChip, isDesktop && S.txnChipDesktop, { borderColor: 'rgba(34,197,94,0.4)' }]} onPress={() => handleSimulateTransaction(100, 'Toka Despensa')}>
+          <Text style={S.txnChipEmoji}>🛍</Text>
+          <Text style={[S.txnChipTxt, isDesktop && S.txnChipTxtDesktop, { color: '#4ADE80' }]}>Despensa{'\n'}+100 XP</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[S.txnChip, isDesktop && S.txnChipDesktop, { borderColor: 'rgba(59,130,246,0.4)' }]} onPress={() => handleSimulateTransaction(150, 'Suscripción Digital')}>
+          <Text style={S.txnChipEmoji}>📺</Text>
+          <Text style={[S.txnChipTxt, isDesktop && S.txnChipTxtDesktop, { color: '#60A5FA' }]}>Streaming{'\n'}+150 XP</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[S.txnChip, isDesktop && S.txnChipDesktop, { borderColor: 'rgba(168,85,247,0.4)' }]} onPress={() => handleSimulateTransaction(200, 'Toka Connect')}>
+          <Text style={S.txnChipEmoji}>📋</Text>
+          <Text style={[S.txnChipTxt, isDesktop && S.txnChipTxtDesktop, { color: '#C084FC' }]}>Validación{'\n'}+200 XP</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
+  const renderProgressMap = () => isMemberOfAny && (
+    <>
+      <Text style={S.sectionTitle}>🗺️ Mapa de Progreso</Text>
+      <ProgressMap
+        nodes={MAP_NODES}
+        missions={LEAGUE_MISSIONS}
+        xpPercent={progressPercent}
+        leagueName={leagues.find(l => l.users.includes(USER_ID))?.name ?? 'BRONCE MÍTICO'}
+        xpLabel={`${userProfile.xp} / ${currentThreshold} XP`}
+        onMissionComplete={(id) => console.log('Mission done:', id)}
+      />
+    </>
+  );
+
+  const renderLeagues = () => (
+    <>
+      <Text style={S.sectionTitle}>🏆 Ligas Activas</Text>
+      {leagues.length === 0 ? (
+        <Text style={S.noLeagues}>No hay torneos disponibles.</Text>
+      ) : (
+        leagues.map((league) => {
+          const isMember   = league.users.includes(USER_ID);
+          const myStats    = league.ranking.find(r => r.userId === USER_ID);
+          const isExpanded = expandedLeague === league.id;
+          const isLocked   = userProfile.level < league.minLevel;
+
+          return (
+            <View key={league.id} style={[S.leagueCard, isLocked && S.leagueLocked]}>
+              {league.endDate && !isLocked && (
+                <View style={S.timerRibbon}>
+                  <Text style={S.timerRibbonText}>⏳ {timeRemaining[league.id] || 'Calculando...'}</Text>
+                </View>
+              )}
+              <View style={S.cardHeader}>
+                <View style={S.coinWrapper}>
+                  <Image source={LEAGUE_ASSETS[league.tier] || LEAGUE_ASSETS.cobre} style={S.coinImage} contentFit="contain" />
+                </View>
+                <View style={S.leagueInfoContainer}>
+                  <Text style={[S.leagueName, isLocked && { color: Colors.textSecondary }]}>{league.name}</Text>
+                  <Text style={S.leagueLevel}>🏅 Req. nivel {league.minLevel}</Text>
+                </View>
+                {!isMember && (
+                  <TouchableOpacity
+                    style={[S.joinButton, isLocked && S.joinButtonLocked]}
+                    onPress={() => handleJoin(league.id)}
+                    disabled={isLocked}
+                  >
+                    <Text style={[S.joinButtonText, isLocked && S.joinTextLocked]}>
+                      {isLocked ? '🔒' : 'Unirse'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {isMember && (
+                  <View style={S.memberBadge}>
+                    <Text style={S.memberBadgeTxt}>✓ MIEMBRO</Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={S.leagueDesc}>{league.description}</Text>
+
+              {isMember && myStats && (
+                <View style={S.statsContainer}>
+                  <View style={S.statBox}>
+                    <Text style={S.statLabel}>POSICIÓN</Text>
+                    <Text style={S.statValue}>#{myStats.position}</Text>
+                  </View>
+                  <View style={[S.statBox, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)', paddingLeft: 20 }]}>
+                    <Text style={S.statLabel}>PUNTOS</Text>
+                    <Text style={S.statValue}>{myStats.points}</Text>
+                  </View>
+                </View>
+              )}
+
+              {isMember && (
+                <View style={S.questsContainer}>
+                  <Text style={S.questsTitle}>Misiones de liga</Text>
+                  {QUESTS.map(q => (
+                    <TouchableOpacity
+                      key={q.id}
+                      style={S.questRow}
+                      onPress={() => handleCompleteQuest(league.id, q.id, q.points)}
+                    >
+                      <Text style={S.questName}>{q.name}</Text>
+                      <View style={S.questBadge}>
+                        <Text style={S.questPts}>+{q.points}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+
+                  <TouchableOpacity
+                    style={S.toggleRankingButton}
+                    onPress={() => setExpandedLeague(isExpanded ? null : league.id)}
+                  >
+                    <Text style={S.toggleRankingText}>
+                      {isExpanded ? '▲ Ocultar Ranking' : '▼ Ver Tabla de Clasificación'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {isExpanded && (
+                <LeagueRanking
+                  ranking={league.ranking}
+                  currentUserId={USER_ID}
+                  tier={league.tier}
+                  leagueId={league.id}
+                  onResolve={handleResolveTournament}
+                />
+              )}
+            </View>
+          );
+        })
+      )}
+    </>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <LeagueJoinModal
+        visible={joinedLeague !== null}
+        leagueName={joinedLeague?.name ?? ''}
+        tier={(joinedLeague?.tier ?? 'cobre') as any}
+        onClose={() => setJoinedLeague(null)}
+      />
+      {showConfetti && Platform.OS !== 'web' && LottieView && (
+        <View style={S.confettiOverlay} pointerEvents="none">
+          <LottieView
+            ref={confettiRef}
+            source={require('../../assets/confetti.json')}
+            autoPlay loop={false} style={S.lottie}
+          />
+        </View>
+      )}
+
+      {isDesktop ? (
+        <View style={S.webLayout}>
+          {/* SIDEBAR */}
+          <View style={S.sidebar}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {renderHeroBanner()}
+              {renderQuickMissions()}
+            </ScrollView>
+          </View>
+          {/* MAIN PANE */}
+          <View style={S.mainPane}>
+            <ScrollView contentContainerStyle={S.scrollContent} showsVerticalScrollIndicator={false}>
+              {renderProgressMap()}
+              <View style={{ marginTop: 24 }}>
+                {renderLeagues()}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      ) : (
+        <ScrollView style={S.container} contentContainerStyle={S.content} showsVerticalScrollIndicator={false}>
+          {renderHeroBanner()}
+          {renderQuickMissions()}
+          {renderProgressMap()}
+          {renderLeagues()}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      )}
+    </View>
+  );
+}

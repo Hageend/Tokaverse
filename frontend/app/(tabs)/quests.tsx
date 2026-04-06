@@ -7,14 +7,14 @@ import { InventoryModal } from '../../components/quest/InventoryModal';
 import { HeroCarousel3D } from '../../components/quest/HeroCarousel3D';
 import { CharacterStatusModal } from '../../components/quest/CharacterStatusModal';
 import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem, RARITY_COLORS } from '../../store/useInventoryStore';
-import { useAudioPlayer } from 'expo-audio';
+import { useCrossPlatformAudio } from '../../hooks/useCrossPlatformAudio';
 import { AdventurerCodex } from '../../components/quest/AdventurerCodex';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { COIN_SPRITES } from '../../data/classSkills';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, Modal, Platform, Dimensions
+  Alert, Modal, Platform, Dimensions, useWindowDimensions
 } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import Constants from 'expo-constants';
@@ -109,18 +109,203 @@ const PIXEL_ART_ASSETS: Record<string, any> = {
   item_chest:  require('../../assets/images/items/item_chest.png'),
 };
 
+// ─── Estilos (Hoisted for Web) ────────────────────────────────────────────────
+const S = StyleSheet.create({
+  container:  { flex: 1, backgroundColor: '#020617' },
+  scroll:     { paddingHorizontal: 14, paddingBottom: 60 },
+  mainLayout: { flex: 1, flexDirection: 'column' },
+  mainLayoutDesktop: { flexDirection: 'row', gap: 20, paddingHorizontal: 20 },
+  sidebar: { width: 320, paddingTop: 20, gap: 15 },
+  avatarSidebarRow: { width: '100%', alignItems: 'center', marginVertical: 30 },
+  scrollDesktop: { paddingHorizontal: 0 },
+  contentGrid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingTop: 20 },
+  gridSection: { width: '48%', gap: 15 },
+  gridSectionFull: { width: '100%', gap: 15 },
+  habitsGridDesktop: { gap: 12 },
+  habitCardDesktop: { marginBottom: 0 },
+  bossPreviewGridDesktop: { flexDirection: 'row', flexWrap: 'wrap', gap: 15 },
+  bossMiniCardDesktop: { width: '31%', marginBottom: 0 },
+
+  // Base styles (continuación)
+  musicBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 14, marginTop: 6, marginBottom: 4,
+    backgroundColor: 'rgba(0,212,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  musicLeft:   { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  musicText:   { flex: 1 },
+  musicTrack:  { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  musicStatus: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 1 },
+  inventoryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(251,191,36,0.12)',
+    borderWidth: 1, borderColor: 'rgba(251,191,36,0.3)',
+    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5,
+  },
+  inventoryBtnTxt: { color: '#fbbf24', fontSize: 10, fontWeight: '800' },
+  volBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(0,212,255,0.12)',
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.25)',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+  },
+  volBtnTxt: { color: Colors.tertiary, fontSize: 11, fontWeight: '800', minWidth: 28 },
+  volPanel: {
+    marginHorizontal: 14, marginBottom: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)',
+    borderRadius: 12, padding: 14,
+  },
+  volPanelLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, marginBottom: 10, textAlign: 'center' },
+  volRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  volArrow: { width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+  volTrack: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'visible', position: 'relative' },
+  volFill:  { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: Colors.tertiary, borderRadius: 3 },
+  volMark:  { position: 'absolute', width: 2, height: 10, top: -2, borderRadius: 1, marginLeft: -1 },
+  volPresets: { flexDirection: 'row', gap: 6, justifyContent: 'center' },
+  volPreset:  { flex: 1, paddingVertical: 6, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  volPresetActive: { borderColor: Colors.tertiary, backgroundColor: 'rgba(0,212,255,0.12)' },
+  volPresetTxt: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700' },
+  overlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', justifyContent: 'center', paddingHorizontal: 14 },
+  modalBox:  { backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: Colors.primary + '88', borderRadius: 14, padding: 20, maxHeight: '90%' },
+  modalHdr:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  modalTitle:{ color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
+  modalSub:  { color: Colors.textMuted, fontSize: 12, marginBottom: 14 },
+  bossCard:    { backgroundColor: 'rgba(127,29,29,0.14)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)', borderRadius: 12, padding: 14 },
+  bossCardTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  bossCardIcon:{ fontSize: 22 },
+  bossCardName:{ color: '#FFF', fontWeight: '900', fontSize: 14 },
+  bossCardSub: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  bossCardBot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
+  bossHpTxt:   { color: '#EF4444', fontSize: 11, fontWeight: '700' },
+  diffBadge:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  diffTxt:     { fontSize: 10, fontWeight: '900' },
+  elemPill:    { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
+  elemPillTxt: { fontSize: 9, fontWeight: '700' },
+  
+  // HUD y Misiones
+  hud: { backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', padding: 16, marginBottom: 15, position: 'relative', overflow: 'hidden' },
+  hudAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: Colors.primary },
+  hudHdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 15 },
+  hudName: { color: '#FFF', fontSize: 16, fontWeight: '900' },
+  hudSub: { color: Colors.textSecondary, fontSize: 11 },
+  statusBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(77,97,252,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(77,97,252,0.2)' },
+  statusBtnTxt: { color: Colors.primary, fontSize: 10, fontWeight: '800' },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  streakTxt: { color: Colors.tertiary, fontSize: 10, fontWeight: '800' },
+  mulRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  mulTxt: { color: '#F59E0B', fontSize: 11, fontWeight: '800' },
+  elemTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1 },
+  elemTagTxt: { fontSize: 9, fontWeight: '800' },
+  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  barsCol: { flex: 1, gap: 10 },
+  barWrap: { gap: 4 },
+  barHdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  barLbl: { fontSize: 10, fontWeight: '900' },
+  barVal: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '700' },
+  barBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 3 },
+  combatBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, borderRadius: 12, padding: 14, marginBottom: 20 },
+  combatBtnGlow: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.primary, opacity: 0.1, borderRadius: 12 },
+  combatBtnTitle: { color: '#FFF', fontSize: 16, fontWeight: '900' },
+  combatBtnSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11 },
+  sectionHdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
+  sectionTitle: { color: '#FFF', fontSize: 15, fontWeight: '900' },
+  sectionSub: { color: Colors.textSecondary, fontSize: 11 },
+  habitsGrid: { gap: 10 },
+  habitCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  habitIconBox: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(16,185,129,0.1)', justifyContent: 'center', alignItems: 'center' },
+  habitTitle: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  habitReward: { color: '#10B981', fontSize: 11, fontWeight: '800' },
+  allBossesBtn: { padding: 4 },
+  allBossesBtnTxt: { color: Colors.primary, fontSize: 11, fontWeight: '800' },
+  bossPreviewGrid: { gap: 10 },
+  bossMiniCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(239,68,68,0.05)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(239,68,68,0.1)' },
+  bossMiniSprite: { width: 36, height: 36 },
+  bossMiniName: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+  miniBadge: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  bossMiniAmt: { color: Colors.textSecondary, fontSize: 10, fontWeight: '700' },
+
+  // ── Modales adicionales y Estado ──
+  modalSectionTitle: { color: Colors.tertiary, fontSize: 12, fontWeight: '900', marginTop: 10, marginBottom: 4, letterSpacing: 1 },
+  epicWarn:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, backgroundColor: 'rgba(255,107,53,0.08)', borderRadius: 6, padding: 7, borderWidth: 1, borderColor: 'rgba(255,107,53,0.25)' },
+  epicWarnTxt: { color: '#FF6B35', fontSize: 10, fontWeight: '700', flex: 1 },
+  
+  classCard:      { width: 140, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: 12, alignItems: 'center', position: 'relative' },
+  classCardActive:{ borderColor: Colors.tertiary, backgroundColor: 'rgba(0,212,255,0.08)' },
+  classCardLocked: { borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.4)', opacity: 0.8 },
+  lockBadge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  classImg:       { width: 80, height: 80, marginBottom: 8 },
+  className:      { color: '#FFF', fontWeight: '900', fontSize: 14, textAlign: 'center' },
+  classSubtitle:  { color: Colors.textMuted, fontSize: 11, marginBottom: 4 },
+  classStat:      { color: Colors.textMuted, fontSize: 11 },
+  bonusBadge:     { marginTop: 8, backgroundColor: 'rgba(249,115,22,0.1)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4, width: '100%', alignItems: 'center' },
+  bonusTxt:       { color: '#F97316', fontSize: 9, fontWeight: 'bold', textAlign: 'center' },
+  activeTag:      { position: 'absolute', top: -10, backgroundColor: Colors.tertiary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, zIndex: 1 },
+  activeTagTxt:   { color: '#000', fontSize: 9, fontWeight: '900' },
+  divider:        { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 14 },
+  statsGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  statBox:        { width: '47%', backgroundColor: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  statLbl:        { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  statVal:        { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4 },
+
+  // ── Tabs y Listas ──
+  tabs: { flexDirection: 'row', marginBottom: 12, gap: 4 },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, overflow: 'hidden', position: 'relative' },
+  tabActive:     { backgroundColor: 'rgba(77,97,252,0.1)' },
+  tabTxt:        { color: Colors.textSecondary, fontSize: 11, fontWeight: '700' },
+  tabTxtActive:  { color: '#FFF', fontWeight: '900' },
+  tabIndicator:  { position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: Colors.primary, borderRadius: 2 },
+  
+  list:   { gap: 8 },
+  card:   { backgroundColor: Colors.surface, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', overflow: 'hidden', flexDirection: 'column' },
+  cardDone:  { opacity: 0.5 },
+  cardAccent:{ height: 3 },
+  cardBody:  { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  cardIcon:  { fontSize: 22 },
+  cardTitle: { color: '#FFF', fontWeight: '700', fontSize: 14, marginBottom: 2 },
+  cardTitleDone: { textDecorationLine: 'line-through', opacity: 0.6 },
+  cardSub:   { fontSize: 11, fontWeight: '700' },
+  cardActionBtn: { position: 'absolute', right: 12, top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1 },
+  cardActionTxt: { fontSize: 9, fontWeight: '700', marginTop: 2 },
+  compactAction: { paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1 },
+  circleBtn: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  checkBtn: { position: 'absolute', right: 14, top: '50%', marginTop: -18, width: 36, height: 36, borderRadius: 8, backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center' },
+  doneIcon: { position: 'absolute', right: 14, top: '50%', marginTop: -14 },
+
+  // ── Party ──
+  partyHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginBottom: 8 },
+  partyTitle: { color: '#FFF', fontWeight: '900', fontSize: 15 },
+  partySub:   { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  partyCard:  { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.surface, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginBottom: 8 },
+  partyAvatar:  { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  partyNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  partyName:    { color: '#FFF', fontWeight: '900', fontSize: 14 },
+  partyCls:     { color: Colors.textMuted, fontSize: 11 },
+  partyHpTxt:   { color: Colors.textMuted, fontWeight: '700', fontSize: 12, marginLeft: 'auto' },
+  partyBarBg:   { height: 5, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
+  partyBarFill: { height: '100%', borderRadius: 3 },
+  partyLowWarn: { color: '#EF4444', fontSize: 10, fontWeight: '700', marginTop: 4 },
+  healBtn:      { backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  healBtnTxt:   { color: '#FFF', fontWeight: '900', fontSize: 11 },
+});
+
 const USER_ID = 'user_123';
 // ... (rest of the setup logic stays the same)
 // ...
 
 const getApiUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-  let host = Constants.expoConfig?.hostUri?.split(':')[0];
-  if (!host || host === 'localhost' || host === '127.0.0.1') {
-    if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000';
+  const address = Constants.expoConfig?.hostUri?.split(':')[0];
+  if (address && address !== 'localhost' && address !== '127.0.0.1') {
+    return `http://${address}:3000`;
   }
-  return `http://${host}:3000`;
+  if (Platform.OS !== 'web') {
+    return 'http://192.168.1.78:3000'; // IP de tu red Wi-Fi
+  }
+  return 'http://localhost:3000';
 };
 const API_URL = getApiUrl();
 const XP_THRESHOLDS = [0, 2500, 10000, 35000, 100000];
@@ -128,27 +313,27 @@ const XP_THRESHOLDS = [0, 2500, 10000, 35000, 100000];
 // ─────────────────────────────────────────────────────────────────────────────
 export default function QuestsScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 1024 && Platform.OS === 'web';
 
   // ── Audio ──────────────────────────────────────────────────────────────
   const [volume, setVolume] = useState(0.7);
   const [showVolumePanel, setShowVolumePanel] = useState(false);
   const [trackName, setTrackName] = useState('Música Ambiente');
 
-  // useAudioPlayer para música ambiental
-  const ambientSound = useAudioPlayer(AMBIENT_MUSIC[Math.floor(Math.random() * AMBIENT_MUSIC.length)]);
+  // hook personalizado para música ambiental (Web + Móvil)
+  const ambientSound = useCrossPlatformAudio(AMBIENT_MUSIC[Math.floor(Math.random() * AMBIENT_MUSIC.length)]);
 
   useEffect(() => {
-    if (ambientSound) {
-      ambientSound.loop = true;
-      ambientSound.volume = volume;
-      ambientSound.play();
+    if (ambientSound.volume !== volume) {
+      ambientSound.setVolume(volume);
     }
-  }, [ambientSound]);
+  }, [volume, ambientSound]);
 
   // Sincronizar volumen
   useEffect(() => {
-    if (ambientSound) ambientSound.volume = volume;
-  }, [volume, ambientSound]);
+    ambientSound.setVolume(volume);
+  }, [volume]);
 
   // ── Backend / Socket ───────────────────────────────────────────────────
   const [userProfile, setUserProfile] = useState<{ id: string; xp: number; level: number } | null>(null);
@@ -323,11 +508,11 @@ export default function QuestsScreen() {
   // ── Sincronizar audio con combate ───────────────────────────────────────
   useEffect(() => {
     if (inCombat) {
-      ambientSound?.pause();
+      ambientSound.pause();
     } else {
-      ambientSound?.play();
+      ambientSound.play();
     }
-  }, [inCombat, ambientSound]);
+  }, [inCombat]);
 
   // ─── Cálculos del elemento del personaje ──────────────────────────────
   const classElem     = (CLASS_ELEMENTS as any)[currentClass.id];
@@ -612,516 +797,262 @@ export default function QuestsScreen() {
 
 
       {/* ━━ CONTENIDO PRINCIPAL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <ScrollView contentContainerStyle={S.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* ── HUD del personaje ──────────────────────────────────────── */}
-        <View style={S.hud}>
-          <View style={S.hudAccent} />
-          <View style={S.hudHdr}>
-            <View>
-              <Text style={S.hudName}>Lv.{level} {currentClass.name}</Text>
-              <Text style={S.hudSub}>{currentClass.subtitle}</Text>
-            </View>
-            <View style={{ gap: 6, alignItems: 'flex-end' }}>
-              <TouchableOpacity
-                style={S.statusBtn}
-                onPress={() => setShowStatus(true)}
-                accessibilityLabel="Ver estado del personaje"
-              >
-                <Ionicons name="person-circle" size={14} color={Colors.primary} />
-                <Text style={S.statusBtnTxt}>Estado</Text>
-              </TouchableOpacity>
-              <View style={S.streakBadge}>
-                <Ionicons name="shield-checkmark" size={12} color={Colors.tertiary} />
-                <Text style={S.streakTxt}>{defenseStreak}d racha</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Renkei x Multiplier — MEJORA UX */}
-          <View style={S.mulRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
-              <Ionicons name="flame" size={14} color="#F59E0B" />
-              <Text style={S.mulTxt}>Renkei x{multiplier}</Text>
-              <View style={S.renkeiTrack}>
-                <View style={[S.renkeiFill, { width: `${(defenseStreak / 10) * 100}%` }]} />
-              </View>
-            </View>
-            {classElemInfo && (
-              <View style={[S.elemTag, { backgroundColor: classElemInfo.color + '1A', borderColor: classElemInfo.color + '44' }]}>
-                <Text style={[S.elemTagTxt, { color: classElemInfo.color }]}>{classElemInfo.emoji} {classElemInfo.label}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Avatar + Barras */}
-          <View style={S.avatarRow}>
-            <CharacterAvatar
-              spriteUrl={currentClass.sprite}
-              isTakingDamage={isTakingDamage}
-              isAttacking={isAttacking}
-            />
-            <View style={S.barsCol}>
-              {[
-                { label: 'HP', cur: hp,   max: hpMax,   color: '#EF4444', cur2: hp },
-                { label: 'MP', cur: mana, max: manaMax, color: '#3B82F6', cur2: mana },
-                { label: 'XP', cur: xp - prevThresh, max: xpMax - prevThresh, color: '#F59E0B', cur2: xp },
-              ].map(b => (
-                <View key={b.label} style={S.barWrap}>
-                  <View style={S.barHdr}>
-                    <Text style={[S.barLbl, { color: b.color }]}>{b.label}</Text>
-                    <Text style={S.barVal}>
-                      {b.label === 'XP' ? `${b.cur2} / ${xpMax} (+${Math.round(multiplier * 100 - 100)}% Bonus)` : `${b.cur}/${b.max}`}
-                    </Text>
-                  </View>
-                  <View style={S.barBg}>
-                    <Animated.View
-                      style={[S.barFill, 
-                        b.label === 'HP' ? hpBarStyle : b.label === 'MP' ? manaBarStyle : xpBarStyle,
-                        { backgroundColor: b.color, shadowColor: b.color }
-                      ]}
-                    />
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {/* ── Botón de Combate ───────────────────────────────────────── */}
-        <TouchableOpacity
-          style={S.combatBtn}
-          onPress={() => setShowBossSelect(true)}
-          activeOpacity={0.8}
-          accessibilityLabel="Iniciar combate"
-          accessibilityRole="button"
-        >
-          <View style={S.combatBtnGlow} />
-          <Image 
-            source={require('../../assets/images/items/item_sword.png')} 
-            style={{ width: 24, height: 24, marginRight: 12 }} 
-            contentFit="contain" 
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={S.combatBtnTitle}>¡A Combatir!</Text>
-            <Text style={S.combatBtnSub}>Enfrenta tus deudas · Elige cartas · 4 fases</Text>
-          </View>
-          <View style={S.combatBtnRight}>
-            {classElemInfo && (
-              <View style={[S.elemBadge, { backgroundColor: classElemInfo.color + '25' }]}>
-                <Text style={{ fontSize: 16 }}>{classElemInfo.emoji}</Text>
-              </View>
-            )}
-            <Ionicons name="chevron-forward" size={20} color="#FFF" />
-          </View>
-        </TouchableOpacity>
-
-        {/* ── Tabs ───────────────────────────────────────────────────── */}
-        <View style={S.tabs}>
-          {[
-            { key: 'HABITOS', label: 'Hábitos' },
-            { key: 'DAILIES', label: 'Dailies'  },
-            { key: 'GRUPO',   label: 'Grupo'    },
-          ].map(t => {
-            const active = activeTab === t.key;
-            return (
-              <TouchableOpacity
-                key={t.key}
-                style={[S.tab, active && S.tabActive]}
-                onPress={() => setActiveTab(t.key as any)}
-                activeOpacity={0.7}
-              >
-                <Text style={[S.tabTxt, active && S.tabTxtActive]}>{t.label}</Text>
-                {active && <View style={S.tabIndicator} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ── Lista ─────────────────────────────────────────────────── */}
-        <View style={S.list}>
-
-          {/* Hábitos — MEJORADOS (Compactos + ✓/✕) */}
-          {activeTab === 'HABITOS' && habits.map((h, i) => (
-            <Animated.View entering={FadeInUp.delay(i * 70)} key={h.id}>
-              <View style={S.card}>
-                <View style={[S.cardAccent, { backgroundColor: h.type === 'positive' ? '#10B981' : '#EF4444' }]} />
-                <View style={S.cardBody}>
-                  {(h as any).pixelIcon ? (
-                    <Image 
-                      source={PIXEL_ART_ASSETS[(h as any).pixelIcon]} 
-                      style={{ width: 22, height: 22, marginRight: 10 }} 
-                      contentFit="contain" 
-                    />
-                  ) : (
-                    <Text style={S.cardIcon}>{h.icon}</Text>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={S.cardTitle}>{h.title}</Text>
-                    <Text style={[S.cardSub, { color: h.type === 'positive' ? '#10B981' : '#EF4444' }]}>
-                      {h.type === 'positive' ? `+${h.xp} XP · x${multiplier} = +${Math.floor(h.xp * multiplier)} XP` : `-${h.hpPenalty} HP penalización`}
-                    </Text>
-                  </View>
+      <View style={[S.mainLayout, isDesktop && S.mainLayoutDesktop]}>
+        
+        {/* SIDEBAR (Solo Desktop) */}
+        {isDesktop && (
+          <View style={S.sidebar}>
+            <View style={S.hud}>
+              <View style={S.hudAccent} />
+              <View style={S.hudHdr}>
+                <View>
+                  <Text style={S.hudName}>Lv.{level} {currentClass.name}</Text>
+                  <Text style={S.hudSub}>{currentClass.subtitle}</Text>
                 </View>
                 <TouchableOpacity
-                  style={[S.compactAction, { borderLeftColor: h.type === 'positive' ? '#10B98133' : '#EF444433' }]}
-                  onPress={() => h.type === 'positive' ? gainXp(h.xp) : takeDamage(h.hpPenalty!)}
-                  activeOpacity={0.7}
+                  style={S.statusBtn}
+                  onPress={() => setShowStatus(true)}
                 >
-                  <View style={[S.circleBtn, { backgroundColor: h.type === 'positive' ? '#10B98115' : '#EF444415' }]}>
-                    <Ionicons
-                      name={h.type === 'positive' ? 'checkmark' : 'close'}
-                      size={18}
-                      color={h.type === 'positive' ? '#10B981' : '#EF4444'}
-                    />
-                  </View>
+                  <Ionicons name="person-circle" size={14} color={Colors.primary} />
+                  <Text style={S.statusBtnTxt}>Estado</Text>
                 </TouchableOpacity>
               </View>
-            </Animated.View>
-          ))}
 
-          {/* Dailies */}
-          {activeTab === 'DAILIES' && dailies.map((d, i) => (
-            <Animated.View entering={FadeInUp.delay(i * 70)} key={d.id}>
-              <View style={[S.card, d.completed && S.cardDone]}>
-                <View style={[S.cardAccent, { backgroundColor: d.completed ? '#10B981' : '#F59E0B' }]} />
-                <View style={S.cardBody}>
-                  {(d as any).pixelIcon ? (
-                    <Image 
-                      source={PIXEL_ART_ASSETS[(d as any).pixelIcon]} 
-                      style={{ width: 22, height: 22, marginRight: 10 }} 
-                      contentFit="contain" 
-                    />
-                  ) : (
-                    <Text style={S.cardIcon}>{d.icon}</Text>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={[S.cardTitle, d.completed && S.cardTitleDone]}>{d.title}</Text>
-                    <Text style={[S.cardSub, { color: '#F59E0B' }]}>
-                      +{d.xp} XP · x{multiplier} = +{Math.floor(d.xp * multiplier)} XP
-                    </Text>
-                  </View>
+              <View style={S.mulRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                  <Ionicons name="flame" size={14} color="#F59E0B" />
+                  <Text style={S.mulTxt}>Renkei x{multiplier}</Text>
                 </View>
-                {!d.completed ? (
-                  <TouchableOpacity
-                    style={[S.compactAction, { borderLeftColor: '#F59E0B33' }]}
-                    onPress={() => {
-                      setDailies(ds => ds.map(x => x.id === d.id ? { ...x, completed: true } : x));
-                      gainXp(d.xp);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[S.circleBtn, { backgroundColor: '#F59E0B15' }]}>
-                      <Ionicons name="checkmark" size={18} color="#F59E0B" />
-                    </View>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={S.compactAction}>
-                    <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                {classElemInfo && (
+                  <View style={[S.elemTag, { backgroundColor: classElemInfo.color + '1A', borderColor: classElemInfo.color + '44' }]}>
+                    <Text style={[S.elemTagTxt, { color: classElemInfo.color }]}>{classElemInfo.emoji} {classElemInfo.label}</Text>
                   </View>
                 )}
               </View>
-            </Animated.View>
-          ))}
 
-          {/* Grupo */}
-          {activeTab === 'GRUPO' && (
-            <Animated.View entering={FadeInUp}>
-              <View style={S.partyHeader}>
-                <Ionicons name="people" size={16} color={Colors.tertiary} />
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={S.partyTitle}>Gremio: Dragón Rojo</Text>
-                  <Text style={S.partySub}>Si alguien falla, todos pierden HP. ¡Cooperen!</Text>
+              <View style={S.avatarSidebarRow}>
+                <CharacterAvatar
+                  spriteUrl={currentClass.sprite}
+                  isTakingDamage={isTakingDamage}
+                  isAttacking={isAttacking}
+                />
+              </View>
+
+              <View style={S.barsCol}>
+                {[
+                  { label: 'HP', cur: hp,   max: hpMax,   color: '#EF4444', style: hpBarStyle },
+                  { label: 'MP', cur: mana, max: manaMax, color: '#3B82F6', style: manaBarStyle },
+                  { label: 'XP', cur: xp - prevThresh, max: xpMax - prevThresh, color: '#F59E0B', style: xpBarStyle },
+                ].map(b => (
+                  <View key={b.label} style={S.barWrap}>
+                    <View style={S.barHdr}>
+                      <Text style={[S.barLbl, { color: b.color }]}>{b.label}</Text>
+                      <Text style={S.barVal}>{Math.floor(b.cur)}/{Math.floor(b.max)}</Text>
+                    </View>
+                    <View style={S.barBg}>
+                      <Animated.View style={[S.barFill, { backgroundColor: b.color }, b.style]} />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[S.combatBtn, { marginTop: 20 }]}
+              onPress={() => setShowBossSelect(true)}
+              activeOpacity={0.8}
+            >
+              <Image source={require('../../assets/images/items/item_sword.png')} style={{ width: 20, height: 20, marginRight: 8 }} contentFit="contain" />
+              <Text style={[S.combatBtnTitle, { fontSize: 14 }]}>Iniciar Combate</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <ScrollView 
+          contentContainerStyle={[S.scroll, isDesktop && S.scrollDesktop]} 
+          showsVerticalScrollIndicator={false}
+          style={{ flex: 1 }}
+        >
+          {/* HUD (Solo Mobile) */}
+          {!isDesktop && (
+            <>
+              <View style={S.hud}>
+                <View style={S.hudAccent} />
+                <View style={S.hudHdr}>
+                  <View>
+                    <Text style={S.hudName}>Lv.{level} {currentClass.name}</Text>
+                    <Text style={S.hudSub}>{currentClass.subtitle}</Text>
+                  </View>
+                  <View style={{ gap: 6, alignItems: 'flex-end' }}>
+                    <TouchableOpacity
+                      style={S.statusBtn}
+                      onPress={() => setShowStatus(true)}
+                    >
+                      <Ionicons name="person-circle" size={14} color={Colors.primary} />
+                      <Text style={S.statusBtnTxt}>Estado</Text>
+                    </TouchableOpacity>
+                    <View style={S.streakBadge}>
+                      <Ionicons name="shield-checkmark" size={12} color={Colors.tertiary} />
+                      <Text style={S.streakTxt}>{defenseStreak}d racha</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={S.mulRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                    <Ionicons name="flame" size={14} color="#F59E0B" />
+                    <Text style={S.mulTxt}>Renkei x{multiplier}</Text>
+                  </View>
+                  {classElemInfo && (
+                    <View style={[S.elemTag, { backgroundColor: classElemInfo.color + '1A', borderColor: classElemInfo.color + '44' }]}>
+                      <Text style={[S.elemTagTxt, { color: classElemInfo.color }]}>{classElemInfo.emoji} {classElemInfo.label}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={S.avatarRow}>
+                  <CharacterAvatar
+                    spriteUrl={currentClass.sprite}
+                    isTakingDamage={isTakingDamage}
+                    isAttacking={isAttacking}
+                  />
+                  <View style={S.barsCol}>
+                    {[
+                      { label: 'HP', cur: hp,   max: hpMax,   color: '#EF4444', style: hpBarStyle },
+                      { label: 'MP', cur: mana, max: manaMax, color: '#3B82F6', style: manaBarStyle },
+                      { label: 'XP', cur: xp - prevThresh, max: xpMax - prevThresh, color: '#F59E0B', style: xpBarStyle },
+                    ].map(b => (
+                      <View key={b.label} style={S.barWrap}>
+                        <View style={S.barHdr}>
+                          <Text style={[S.barLbl, { color: b.color }]}>{b.label}</Text>
+                          <Text style={S.barVal}>{Math.floor(b.cur)}/{Math.floor(b.max)}</Text>
+                        </View>
+                        <View style={S.barBg}>
+                          <Animated.View style={[S.barFill, { backgroundColor: b.color }, b.style]} />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               </View>
 
-              {[
-                { name: 'Yamato', cls: 'Samurai',    hp: 180, hpMax: 200 },
-                { name: 'Sakura', cls: 'Mahōtsukai', hp: 18,  hpMax: 80  },
-                { name: 'Riku',   cls: 'Shinobi',    hp: 130, hpMax: 140 },
-              ].map((m, i) => {
-                const isLow = m.hp < m.hpMax * 0.3;
-                const pct   = (m.hp / m.hpMax) * 100;
-                return (
-                  <View key={i} style={S.partyCard}>
-                    <View style={[S.partyAvatar, { backgroundColor: isLow ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.1)' }]}>
-                      <Ionicons name="person" size={18} color={isLow ? '#EF4444' : '#10B981'} />
+              <TouchableOpacity
+                style={S.combatBtn}
+                onPress={() => setShowBossSelect(true)}
+                activeOpacity={0.8}
+              >
+                <View style={S.combatBtnGlow} />
+                <Image source={require('../../assets/images/items/item_sword.png')} style={{ width: 24, height: 24, marginRight: 12 }} contentFit="contain" />
+                <View style={{ flex: 1 }}>
+                  <Text style={S.combatBtnTitle}>¡A Combatir!</Text>
+                  <Text style={S.combatBtnSub}>Enfrenta tus deudas · Elige cartas</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#FFF" />
+              </TouchableOpacity>
+            </>
+          )}
+
+          <View style={[isDesktop && S.contentGrid]}>
+            {/* ── SECCIÓN: Hábitos ────────────────────────────────────── */}
+            <View style={[isDesktop && S.gridSection]}>
+              <View style={S.sectionHdr}>
+                <View>
+                  <Text style={S.sectionTitle}>💎 Hábitos Diarios</Text>
+                  <Text style={S.sectionSub}>Acciones rápidas para ganar XP</Text>
+                </View>
+              </View>
+
+              <View style={[S.habitsGrid, isDesktop && S.habitsGridDesktop]}>
+                {habits.map(h => (
+                  <TouchableOpacity
+                    key={h.id}
+                    style={[S.habitCard, isDesktop && S.habitCardDesktop]}
+                    onPress={() => h.type === 'positive' ? gainXp(h.xp, h.title) : takeDamage(h.hpPenalty!)}
+                  >
+                    <View style={[S.habitIconBox, h.type === 'negative' && { backgroundColor: '#EF444422' }]}>
+                      {h.pixelIcon ? (
+                        <Image source={PIXEL_ART_ASSETS[h.pixelIcon]} style={{ width: 24, height: 24 }} contentFit="contain" />
+                      ) : (
+                        <Text style={{ fontSize: 20 }}>{h.icon}</Text>
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <View style={S.partyNameRow}>
-                        <Text style={S.partyName}>{m.name}</Text>
-                        <Text style={S.partyCls}>{m.cls}</Text>
-                        <Text style={[S.partyHpTxt, isLow && { color: '#EF4444' }]}>{m.hp}/{m.hpMax}</Text>
-                      </View>
-                      <View style={S.partyBarBg}>
-                        <View style={[S.partyBarFill, {
-                          width: `${pct}%` as any,
-                          backgroundColor: isLow ? '#EF4444' : '#10B981',
-                        }]} />
-                      </View>
-                      {isLow && <Text style={S.partyLowWarn}>⚠️ HP crítico — necesita curación</Text>}
+                      <Text style={S.habitTitle}>{h.title}</Text>
+                      <Text style={[S.habitReward, h.type === 'negative' && { color: '#EF4444' }]}>
+                        {h.type === 'positive' ? `+${h.xp} XP` : `-${h.hpPenalty} HP`}
+                      </Text>
                     </View>
-                    {isLow && (
-                      <TouchableOpacity style={S.healBtn} accessibilityLabel={`Curar a ${m.name}`}>
-                        <Text style={S.healBtnTxt}>CURAR</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })}
-            </Animated.View>
-          )}
-        </View>
-      </ScrollView>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* ── SECCIÓN: Dailies ────────────────────────────────────── */}
+            <View style={[isDesktop && S.gridSection]}>
+              <View style={S.sectionHdr}>
+                <View>
+                  <Text style={S.sectionTitle}>📅 Misiones del Día</Text>
+                  <Text style={S.sectionSub}>Objetivos fijos · Reseteo 24h</Text>
+                </View>
+              </View>
+
+              <View style={[S.habitsGrid, isDesktop && S.habitsGridDesktop]}>
+                {dailies.map(d => (
+                  <TouchableOpacity
+                    key={d.id}
+                    style={[S.habitCard, isDesktop && S.habitCardDesktop]}
+                    onPress={() => gainXp(d.xp, d.title)}
+                  >
+                    <View style={S.habitIconBox}>
+                      <Text style={{ fontSize: 20 }}>{d.icon}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={S.habitTitle}>{d.title}</Text>
+                      <Text style={S.habitReward}>+{d.xp} XP</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.2)" />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* ── SECCIÓN: Bosses ─────────────────────────────────────── */}
+            <View style={[isDesktop && S.gridSectionFull]}>
+              <View style={S.sectionHdr}>
+                <View>
+                  <Text style={S.sectionTitle}>⚔️ Desafíos de Jefe</Text>
+                  <Text style={S.sectionSub}>Enfrenta tus deudas más grandes</Text>
+                </View>
+                <TouchableOpacity style={S.allBossesBtn} onPress={() => setShowBossSelect(true)}>
+                  <Text style={S.allBossesBtnTxt}>Ver todos</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[S.bossPreviewGrid, isDesktop && S.bossPreviewGridDesktop]}>
+                {DEMO_BOSSES.slice(0, isDesktop ? 4 : 2).map((b, i) => (
+                  <TouchableOpacity 
+                    key={i} 
+                    style={[S.bossMiniCard, isDesktop && S.bossMiniCardDesktop]} 
+                    onPress={() => selectBoss(b)}
+                  >
+                    <Image source={b.sprite} style={S.bossMiniSprite} contentFit="contain" />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={S.bossMiniName}>{b.label}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={[S.miniBadge, { backgroundColor: b.diffColor + '22' }]}>
+                          <Text style={{ color: b.diffColor, fontSize: 8, fontWeight: '700' }}>{b.difficulty}</Text>
+                        </View>
+                        <Text style={S.bossMiniAmt}>${b.amount.toLocaleString()}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-// ─── ESTILOS ─────────────────────────────────────────────────────────────────
-const S = StyleSheet.create({
-  container:  { flex: 1, backgroundColor: Colors.background },
-  scroll:     { paddingHorizontal: 14, paddingBottom: 60 },
-
-  // ── Barra de música ──────────────────────────────────────────────────
-  musicBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 14, marginTop: 6, marginBottom: 4,
-    backgroundColor: 'rgba(0,212,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)',
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
-  },
-  musicLeft:   { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  musicText:   { flex: 1 },
-  musicTrack:  { color: '#FFF', fontSize: 12, fontWeight: '700' },
-  musicStatus: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 1 },
-
-  // ── Botón de inventario ──────────────────────────────────────────────
-  inventoryBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(251,191,36,0.12)',
-    borderWidth: 1, borderColor: 'rgba(251,191,36,0.3)',
-    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5,
-  },
-  inventoryBtnTxt: { color: '#fbbf24', fontSize: 10, fontWeight: '800' },
-
-  // ── Botón de volumen ─────────────────────────────────────────────────
-  volBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(0,212,255,0.12)',
-    borderWidth: 1, borderColor: 'rgba(0,212,255,0.25)',
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
-  },
-  volBtnTxt: { color: Colors.tertiary, fontSize: 11, fontWeight: '800', minWidth: 28 },
-
-  // ── Panel de volumen ─────────────────────────────────────────────────
-  volPanel: {
-    marginHorizontal: 14, marginBottom: 8,
-    backgroundColor: Colors.surface,
-    borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)',
-    borderRadius: 12, padding: 14,
-  },
-  volPanelLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, marginBottom: 10, textAlign: 'center' },
-  volRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  volArrow: { width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
-  volTrack: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'visible', position: 'relative' },
-  volFill:  { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: Colors.tertiary, borderRadius: 3 },
-  volMark:  { position: 'absolute', width: 2, height: 10, top: -2, borderRadius: 1, marginLeft: -1 },
-  volPresets: { flexDirection: 'row', gap: 6, justifyContent: 'center' },
-  volPreset:  { flex: 1, paddingVertical: 6, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  volPresetActive: { borderColor: Colors.tertiary, backgroundColor: 'rgba(0,212,255,0.12)' },
-  volPresetTxt: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700' },
-
-  // ── Modales ──────────────────────────────────────────────────────────
-  overlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', justifyContent: 'center', paddingHorizontal: 14 },
-  modalBox:  { backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: Colors.primary + '88', borderRadius: 14, padding: 20, maxHeight: '90%' },
-  modalHdr:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  modalTitle:{ color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
-  modalSub:  { color: Colors.textMuted, fontSize: 12, marginBottom: 14 },
-
-  // ── Selección de Jefe ─────────────────────────────────────────────────
-  bossCard:    { backgroundColor: 'rgba(127,29,29,0.14)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)', borderRadius: 12, padding: 14 },
-  bossCardTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  bossCardIcon:{ fontSize: 22 },
-  bossCardName:{ color: '#FFF', fontWeight: '900', fontSize: 14 },
-  bossCardSub: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
-  bossCardBot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
-  bossHpTxt:   { color: '#EF4444', fontSize: 11, fontWeight: '700' },
-  diffBadge:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
-  diffTxt:     { fontSize: 10, fontWeight: '900' },
-  elemPill:    { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
-  elemPillTxt: { fontSize: 9, fontWeight: '700' },
-  epicWarn:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, backgroundColor: 'rgba(255,107,53,0.08)', borderRadius: 6, padding: 7, borderWidth: 1, borderColor: 'rgba(255,107,53,0.25)' },
-  epicWarnTxt: { color: '#FF6B35', fontSize: 10, fontWeight: '700', flex: 1 },
-
-  // ── Modal Status ──────────────────────────────────────────────────────
-  classCard:      { width: 140, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: 12, alignItems: 'center', position: 'relative' },
-  classCardActive:{ borderColor: Colors.tertiary, backgroundColor: 'rgba(0,212,255,0.08)' },
-  classCardLocked: {
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    opacity: 0.8,
-  },
-  lockBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  classImg:       { width: 80, height: 80, marginBottom: 8 },
-  className:      { color: '#FFF', fontWeight: '900', fontSize: 14, textAlign: 'center' },
-  classSubtitle:  { color: Colors.textMuted, fontSize: 11, marginBottom: 4 },
-  classStat:      { color: Colors.textMuted, fontSize: 11 },
-  bonusBadge:     { marginTop: 8, backgroundColor: 'rgba(249,115,22,0.1)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4, width: '100%', alignItems: 'center' },
-  bonusTxt:       { color: '#F97316', fontSize: 9, fontWeight: 'bold', textAlign: 'center' },
-  activeTag:      { position: 'absolute', top: -10, backgroundColor: Colors.tertiary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, zIndex: 1 },
-  activeTagTxt:   { color: '#000', fontSize: 9, fontWeight: '900' },
-  divider:        { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 14 },
-  statsGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statBox:        { width: '47%', backgroundColor: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  statLbl:        { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  statVal:        { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4 },
-
-  // ── HUD ───────────────────────────────────────────────────────────────
-  hud: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-    borderLeftWidth: 4, borderLeftColor: Colors.primary,
-    padding: 14, marginTop: 10, marginBottom: 12,
-    overflow: 'hidden',
-  },
-  hudAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: Colors.primary + '44' },
-  hudHdr:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  hudName:   { color: '#FFF', fontSize: 18, fontWeight: '900' },
-  hudSub:    { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
-  statusBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(77,97,252,0.12)',
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 8, borderWidth: 1, borderColor: 'rgba(77,97,252,0.3)',
-  },
-  statusBtnTxt: { color: '#FFF', fontSize: 11, fontWeight: '700' },
-  streakBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,212,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(0,212,255,0.25)' },
-  streakTxt:    { color: Colors.tertiary, fontSize: 10, fontWeight: '800' },
-  mulRow:       { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  mulTxt:       { color: '#F59E0B', fontSize: 12, fontWeight: '800' },
-  renkeiTrack: { flex: 1, height: 4, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 2, marginLeft: 4, overflow: 'hidden' },
-  renkeiFill:  { height: '100%', backgroundColor: '#F59E0B', borderRadius: 2 },
-  elemTag:      { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
-  elemTagTxt:   { fontSize: 10, fontWeight: '700' },
-  avatarRow:    { flexDirection: 'row', alignItems: 'center' },
-  barsCol:      { flex: 1, marginLeft: 14, gap: 8 },
-  barWrap:      {},
-  barHdr:       { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
-  barLbl:       { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  barVal:       { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)' },
-  barBg:        { height: 7, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 4, overflow: 'hidden', borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.1)' },
-  barFill:      { height: '100%', borderRadius: 4, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4 },
-
-  // ── Botón de combate ──────────────────────────────────────────────────
-  combatBtn: {
-    marginBottom: 14,
-    backgroundColor: '#7F1D1D',
-    borderWidth: 1.5, borderColor: '#EF4444',
-    borderRadius: 14, padding: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    overflow: 'hidden', position: 'relative',
-  },
-  combatBtnGlow:  { position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(239,68,68,0.12)' },
-  combatBtnIcon:  { fontSize: 30 },
-  combatBtnTitle: { color: '#FFF', fontWeight: '900', fontSize: 17 },
-  combatBtnSub:   { color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 2 },
-  combatBtnRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  elemBadge:      { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-
-  // ── Tabs ──────────────────────────────────────────────────────────────
-  tabs: { flexDirection: 'row', marginBottom: 12, gap: 4 },
-  tab: {
-    flex: 1, paddingVertical: 10, alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8, overflow: 'hidden', position: 'relative',
-  },
-  tabActive:     { backgroundColor: 'rgba(77,97,252,0.1)' },
-  tabTxt:        { color: Colors.textSecondary, fontSize: 11, fontWeight: '700' },
-  tabTxtActive:  { color: '#FFF', fontWeight: '900' },
-  tabIndicator:  { position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: Colors.primary, borderRadius: 2 },
-
-  // ── Cards ─────────────────────────────────────────────────────────────
-  list:   { gap: 8 },
-  card:   {
-    backgroundColor: Colors.surface,
-    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    overflow: 'hidden', flexDirection: 'column',
-  },
-  cardDone:  { opacity: 0.5 },
-  cardAccent:{ height: 3 },
-  cardBody:  { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  cardIcon:  { fontSize: 22 },
-  cardTitle: { color: '#FFF', fontWeight: '700', fontSize: 14, marginBottom: 2 },
-  cardTitleDone: { textDecorationLine: 'line-through', opacity: 0.6 },
-  cardSub:   { fontSize: 11, fontWeight: '700' },
-  cardActionBtn: {
-    position: 'absolute', right: 12, top: '50%',
-    marginTop: -22,
-    width: 44, height: 44, borderRadius: 8,
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-  },
-  cardActionTxt: { fontSize: 9, fontWeight: '700', marginTop: 2 },
-  compactAction: {
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderLeftWidth: 1,
-  },
-  circleBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  checkBtn: {
-    position: 'absolute', right: 14, top: '50%',
-    marginTop: -18,
-    width: 36, height: 36, borderRadius: 8,
-    backgroundColor: '#F59E0B',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  doneIcon: { position: 'absolute', right: 14, top: '50%', marginTop: -14 },
-
-  // ── Party / Grupo ─────────────────────────────────────────────────────
-  partyHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.surface, padding: 14,
-    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    marginBottom: 8,
-  },
-  partyTitle: { color: '#FFF', fontWeight: '900', fontSize: 15 },
-  partySub:   { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
-  partyCard:  {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: Colors.surface, padding: 12,
-    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    marginBottom: 8,
-  },
-  partyAvatar:  { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  partyNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  partyName:    { color: '#FFF', fontWeight: '900', fontSize: 14 },
-  partyCls:     { color: Colors.textMuted, fontSize: 11 },
-  partyHpTxt:   { color: Colors.textMuted, fontWeight: '700', fontSize: 12, marginLeft: 'auto' },
-  partyBarBg:   { height: 5, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
-  partyBarFill: { height: '100%', borderRadius: 3 },
-  partyLowWarn: { color: '#EF4444', fontSize: 10, fontWeight: '700', marginTop: 4 },
-  healBtn:      { backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  healBtnTxt:   { color: '#FFF', fontWeight: '900', fontSize: 11 },
-  modalSectionTitle: { color: Colors.tertiary, fontSize: 12, fontWeight: '900', marginTop: 10, marginBottom: 4, letterSpacing: 1 },
-});
