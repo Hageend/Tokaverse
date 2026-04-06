@@ -4,7 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, Dimensions, Platform,
+  Modal, Dimensions, Platform, Alert,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle,
@@ -253,7 +253,12 @@ function ItemDetail({ item, onClose, onUse }: { item: InventoryItem; onClose: ()
         {isEquippable && (
           <TouchableOpacity 
             style={[detStyles.equipBtn, item.isEquipped && detStyles.unequipBtn]} 
-            onPress={() => equipItem(item.id)}
+            onPress={() => {
+              const res = equipItem(item.id);
+              if (!res.success && res.message) {
+                Alert.alert('🚫 Equipo Fallido', res.message);
+              }
+            }}
           >
             <Text style={detStyles.equipBtnTxt}>
               {item.isEquipped ? 'DESEQUIPAR' : 'EQUIPAR'}

@@ -1,10 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Text, StyleSheet, ScrollView, View, TouchableOpacity, ActivityIndicator, Alert, Platform, Image } from 'react-native';
+import { Text, StyleSheet, ScrollView, View, TouchableOpacity, ActivityIndicator, Alert, Platform, Animated } from 'react-native';
+import { Image } from 'expo-image';
 import { Colors } from '../../constants/Colors';
 import { io, Socket } from 'socket.io-client';
 import LottieView from 'lottie-react-native';
 import Constants from 'expo-constants';
 import { LeagueRanking } from '../../components/league/LeagueRanking';
+import { ProgressMap, MapNode, MapMission } from '../../components/league/ProgressMap';
+import { LeagueJoinModal } from '../../components/league/LeagueJoinModal';
 
 interface UserProfile {
   id: string;
@@ -56,10 +59,28 @@ const getApiUrl = () => {
 const API_URL = getApiUrl();
 
 const QUESTS = [
-  { id: 'q_despensa', name: '🛒 Compras de Despensa', points: 100 },
-  { id: 'q_combustible', name: '⛽ Carga de Gasolina', points: 150 },
-  { id: 'q_connect', name: '📋 Comprobación de Gasto', points: 200 },
-  { id: 'q_total', name: '💰 Dispersión Recibida', points: 300 }
+  { id: 'q_despensa', name: '🛒 Compra TokaDespensa', points: 100 },
+  { id: 'q_digital',   name: '📺 Pago Suscripción',    points: 150 },
+  { id: 'q_connect',   name: '📋 Validar Ticket Fiscal', points: 200 },
+  { id: 'q_total',     name: '💰 Abono de Nómina',     points: 300 }
+];
+
+const MAP_NODES: MapNode[] = [
+  { id: 1, label: 'Inicio',      icon: '🏠', x: 170, y: 390, state: 'done'   },
+  { id: 2, label: 'Primer pago', icon: '💳', x: 255, y: 330, state: 'done'   },
+  { id: 3, label: 'Despensa',    icon: '🛒', x: 130, y: 275, state: 'done'   },
+  { id: 4, label: 'Streaming',   icon: '📺', x: 230, y: 215, state: 'active' },
+  { id: 5, label: 'Boss',        icon: '⚔️', x: 120, y: 160, state: 'locked' },
+  { id: 6, label: 'Nómina',      icon: '💰', x: 240, y: 100, state: 'locked' },
+  { id: 7, label: 'Leyenda',     icon: '👑', x: 170, y: 44,  state: 'locked' },
+];
+
+const LEAGUE_MISSIONS: MapMission[] = [
+  { id: 'm1', icon: '💳', name: 'Ingresa $100 MXN',              xp: 50,  done: true  },
+  { id: 'm2', icon: '🛒', name: 'Realiza 3 compras con TokaPay', xp: 150, done: false },
+  { id: 'm3', icon: '📺', name: 'Paga una suscripción digital',  xp: 120, done: false },
+  { id: 'm4', icon: '⚔️', name: 'Derrota a un boss',             xp: 500, done: false },
+  { id: 'm5', icon: '💰', name: 'Recibe tu nómina en TokaPay',   xp: 300, done: false },
 ];
 
 export default function LeagueScreen() {
@@ -71,6 +92,7 @@ export default function LeagueScreen() {
   const [timeRemaining, setTimeRemaining] = useState<Record<string, string>>({});
   const confettiRef = useRef<LottieView>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const handleNetworkError = (err: any) => {
@@ -177,6 +199,10 @@ export default function LeagueScreen() {
       const data = await res.json();
       if (!data.success) {
          Alert.alert('Alerta', data.message);
+      } else {
+        // Mostrar animación de bienvenida
+        const league = leagues.find(l => l.id === leagueId);
+        if (league) setJoinedLeague(league);
       }
     } catch (err) {
       handleNetworkError(err);
@@ -231,146 +257,209 @@ export default function LeagueScreen() {
   const currentThreshold = XP_THRESHOLDS[userProfile.level] || 35000;
   const prevThreshold = XP_THRESHOLDS[userProfile.level - 1] || 0;
   const progressPercent = userProfile.level >= 4 ? 100 : Math.min(100, Math.floor(((userProfile.xp - prevThreshold) / (currentThreshold - prevThreshold)) * 100));
+  const isMemberOfAny = leagues.some(l => l.users.includes(USER_ID));
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      {/* Modal de bienvenida al unirse a una liga */}
+      <LeagueJoinModal
+        visible={joinedLeague !== null}
+        leagueName={joinedLeague?.name ?? ''}
+        tier={(joinedLeague?.tier ?? 'cobre') as any}
+        onClose={() => setJoinedLeague(null)}
+      />
       {showConfetti && (
         <View style={styles.confettiOverlay} pointerEvents="none">
           <LottieView
             ref={confettiRef}
             source={require('../../assets/confetti.json')}
-            autoPlay
-            loop={false}
-            style={styles.lottie}
+            autoPlay loop={false} style={styles.lottie}
           />
         </View>
       )}
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>TOKA LIGAS</Text>
-        <Text style={styles.subtitle}>Supera misiones, sube de nivel y reclama la gloria.</Text>
-        
-        {/* --- GLOBAL XP BAR COMPONENT --- */}
-        <View style={styles.xpCard}>
-           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-             <Text style={styles.xpTitle}>Tú Nivel Global: {userProfile.level}</Text>
-             <Text style={styles.xpAmount}>{userProfile.xp} XP</Text>
-           </View>
-           
-           <View style={styles.progressBarBg}>
-               <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-           </View>
-           <Text style={styles.xpThresholdCaption}>Faltan {Math.max(0, currentThreshold - userProfile.xp)} XP para el próximo nivel.</Text>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-           {/* TRANSACTION SIMULATORS (Toka Products) */}
-           <View style={styles.transactionHub}>
-               <TouchableOpacity style={styles.txnButton} onPress={() => handleSimulateTransaction(100, 'Toka Despensa')}>
-                   <Text style={styles.txnBtnText}>🛍 Compra Despensa (+100 XP)</Text>
-               </TouchableOpacity>
-               <TouchableOpacity style={[styles.txnButton, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.3)' }]} onPress={() => handleSimulateTransaction(150, 'Toka Combustible')}>
-                   <Text style={[styles.txnBtnText, { color: '#60A5FA' }]}>⛽ Carga Gasolina (+150 XP)</Text>
-               </TouchableOpacity>
-               <TouchableOpacity style={[styles.txnButton, { backgroundColor: 'rgba(168, 85, 247, 0.1)', borderColor: 'rgba(168, 85, 247, 0.3)' }]} onPress={() => handleSimulateTransaction(200, 'Toka Connect')}>
-                   <Text style={[styles.txnBtnText, { color: '#C084FC' }]}>📋 Gasto Comprobado (+200 XP)</Text>
-               </TouchableOpacity>
-           </View>
-        </View>
+        {/* ── HERO BANNER ─────────────────────────────────────────── */}
+        {isMemberOfAny ? (
+          // ── Miembro activo: mostrar info de liga e imagen ──────────
+          <View style={styles.heroBanner}>
+            {/* Imagen de la liga como hero art */}
+            <View style={styles.heroBannerImageRow}>
+              <View style={styles.heroCoinWrap}>
+                <Image
+                  source={LEAGUE_ASSETS[leagues.find(l => l.users.includes(USER_ID))?.tier ?? 'cobre']}
+                  style={styles.heroCoinLarge}
+                  contentFit="contain"
+                />
+                <View style={styles.heroCoinGlow} />
+              </View>
+              <View style={styles.heroBannerLeft}>
+                <Text style={styles.heroBannerEyebrow}>LIGA ACTIVA</Text>
+                <Text style={styles.heroBannerTitle} numberOfLines={1}>
+                  {leagues.find(l => l.users.includes(USER_ID))?.name ?? 'TOKA LIGAS'}
+                </Text>
+                <Text style={styles.heroBannerSub}>Supera misiones · Sube de nivel</Text>
+                <View style={styles.levelBadgeInline}>
+                  <Text style={styles.levelBadgeInlineTxt}>NIV. {userProfile.level}</Text>
+                </View>
+              </View>
+            </View>
+            {/* XP Bar */}
+            <View style={styles.xpRow}>
+              <Text style={styles.xpLabel}>XP {userProfile.xp.toLocaleString()}</Text>
+              <Text style={styles.xpLabel}>{currentThreshold.toLocaleString()}</Text>
+            </View>
+            <View style={styles.progressBarBg}>
+              <Animated.View style={[styles.progressBarFill, { width: `${progressPercent}%` as any }]} />
+            </View>
+            <Text style={styles.xpThresholdCaption}>
+              Faltan {Math.max(0, currentThreshold - userProfile.xp).toLocaleString()} XP para el próximo rango
+            </Text>
+          </View>
+        ) : (
+          // ── No miembro: CTA para unirse ────────────────────────────
+          <View style={styles.heroBannerCTA}>
+            <Text style={styles.ctaTitle}>🏆 TOKA LIGAS</Text>
+            <Text style={styles.ctaSub}>¡Únete a una liga, completa misiones y sube de rango!</Text>
+            <View style={styles.ctaTierRow}>
+              {(['cobre', 'plata', 'oro', 'estrella'] as const).map(tier => (
+                <Image key={tier} source={LEAGUE_ASSETS[tier]} style={styles.ctaTierCoin} contentFit="contain" />
+              ))}
+            </View>
+            <Text style={styles.ctaHint}>👇 Selecciona una liga abajo para comenzar</Text>
+          </View>
+        )}
 
+        {/* ── SIMULADORES (Solo si es miembro) ─────────────────────── */}
+        {isMemberOfAny && (
+          <>
+            <Text style={styles.sectionTitle}>⚡ Misiones Rápidas</Text>
+            <View style={styles.txnGrid}>
+              <TouchableOpacity style={[styles.txnChip, { borderColor: 'rgba(34,197,94,0.4)' }]} onPress={() => handleSimulateTransaction(100, 'Toka Despensa')}>
+                <Text style={styles.txnChipEmoji}>🛍</Text>
+                <Text style={[styles.txnChipTxt, { color: '#4ADE80' }]}>Despensa{'\n'}+100 XP</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.txnChip, { borderColor: 'rgba(59,130,246,0.4)' }]} onPress={() => handleSimulateTransaction(150, 'Suscripción Digital')}>
+                <Text style={styles.txnChipEmoji}>📺</Text>
+                <Text style={[styles.txnChipTxt, { color: '#60A5FA' }]}>Streaming{'\n'}+150 XP</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.txnChip, { borderColor: 'rgba(168,85,247,0.4)' }]} onPress={() => handleSimulateTransaction(200, 'Toka Connect')}>
+                <Text style={styles.txnChipEmoji}>📋</Text>
+                <Text style={[styles.txnChipTxt, { color: '#C084FC' }]}>Validación{'\n'}+200 XP</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {/* ─── MAPA DE PROGRESO (Solo si es miembro) ──────────────── */}
+        {isMemberOfAny && (
+          <>
+            <Text style={styles.sectionTitle}>🗺️ Mapa de Progreso</Text>
+            <ProgressMap
+              nodes={MAP_NODES}
+              missions={LEAGUE_MISSIONS}
+              xpPercent={progressPercent}
+              leagueName={leagues.find(l => l.users.includes(USER_ID))?.name ?? 'BRONCE MÍTICO'}
+              xpLabel={`${userProfile.xp} / ${currentThreshold} XP para el siguiente rango`}
+              onMissionComplete={(id) => console.log('Mission done:', id)}
+            />
+          </>
+        )}
+
+        {/* ─── LIGAS ─────────────────────────────────────────────── */}
+        <Text style={styles.sectionTitle}>🏆 Ligas Activas</Text>
         {leagues.length === 0 ? (
           <Text style={styles.noLeagues}>No hay torneos disponibles.</Text>
         ) : (
           leagues.map((league) => {
-            const isMember = league.users.includes(USER_ID);
-            const myStats = league.ranking.find(r => r.userId === USER_ID);
+            const isMember   = league.users.includes(USER_ID);
+            const myStats    = league.ranking.find(r => r.userId === USER_ID);
             const isExpanded = expandedLeague === league.id;
-            const isLocked = userProfile.level < league.minLevel;
+            const isLocked   = userProfile.level < league.minLevel;
 
             return (
               <View key={league.id} style={[styles.leagueCard, isLocked && styles.leagueLocked]}>
-                
+
                 {/* Timer Ribbon */}
                 {league.endDate && !isLocked && (
                   <View style={styles.timerRibbon}>
-                     <Text style={styles.timerRibbonText}>
-                       ⏳ {timeRemaining[league.id] || "Calculando..."}
-                     </Text>
+                    <Text style={styles.timerRibbonText}>⏳ {timeRemaining[league.id] || 'Calculando...'}</Text>
                   </View>
                 )}
 
+                {/* Header row: coin + info + join */}
                 <View style={styles.cardHeader}>
-                  
-                  {/* COIN MEDAL IMAGE */}
                   <View style={styles.coinWrapper}>
-                     <Image 
-                        source={LEAGUE_ASSETS[league.tier] || LEAGUE_ASSETS.cobre} 
-                        style={styles.coinImage} 
-                        resizeMode="contain" 
-                     />
+                    <Image source={LEAGUE_ASSETS[league.tier] || LEAGUE_ASSETS.cobre} style={styles.coinImage} resizeMode="contain" />
                   </View>
-
                   <View style={styles.leagueInfoContainer}>
                     <Text style={[styles.leagueName, isLocked && { color: Colors.textSecondary }]}>{league.name}</Text>
-                    <Text style={styles.leagueLevel}>🏅 Requisito mínimo: nivel {league.minLevel}</Text>
+                    <Text style={styles.leagueLevel}>🏅 Req. nivel {league.minLevel}</Text>
                   </View>
-
                   {!isMember && (
-                    <TouchableOpacity 
-                       style={[styles.joinButton, isLocked && styles.joinButtonLocked]} 
-                       onPress={() => handleJoin(league.id)}
-                       disabled={isLocked}
+                    <TouchableOpacity
+                      style={[styles.joinButton, isLocked && styles.joinButtonLocked]}
+                      onPress={() => handleJoin(league.id)}
+                      disabled={isLocked}
                     >
                       <Text style={[styles.joinButtonText, isLocked && styles.joinTextLocked]}>
-                        {isLocked ? '🔒 Bloqueado' : 'Unirse Ahora'}
+                        {isLocked ? '🔒' : 'Unirse'}
                       </Text>
                     </TouchableOpacity>
+                  )}
+                  {isMember && (
+                    <View style={styles.memberBadge}>
+                      <Text style={styles.memberBadgeTxt}>✓ MIEMBRO</Text>
+                    </View>
                   )}
                 </View>
 
                 <Text style={styles.leagueDesc}>{league.description}</Text>
-                
-                {/* Mis Estadísticas */}
+
+                {/* Stats row (if member) */}
                 {isMember && myStats && (
                   <View style={styles.statsContainer}>
                     <View style={styles.statBox}>
-                      <Text style={styles.statLabel}>Posición</Text>
+                      <Text style={styles.statLabel}>POSICIÓN</Text>
                       <Text style={styles.statValue}>#{myStats.position}</Text>
                     </View>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statLabel}>Puntos</Text>
+                    <View style={[styles.statBox, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)', paddingLeft: 20 }]}>
+                      <Text style={styles.statLabel}>PUNTOS</Text>
                       <Text style={styles.statValue}>{myStats.points}</Text>
                     </View>
                   </View>
                 )}
 
-                {/* Quests Internos */}
+                {/* Quests */}
                 {isMember && (
                   <View style={styles.questsContainer}>
-                    <Text style={styles.questsTitle}>Misiones activas de la liga</Text>
+                    <Text style={styles.questsTitle}>Misiones de liga</Text>
                     {QUESTS.map(q => (
-                      <TouchableOpacity 
-                        key={q.id} 
+                      <TouchableOpacity
+                        key={q.id}
                         style={styles.questRow}
                         onPress={() => handleCompleteQuest(league.id, q.id, q.points)}
                       >
-                         <Text style={styles.questName}>{q.name}</Text>
-                         <View style={styles.questBadge}>
-                           <Text style={styles.questPts}>+{q.points} pt</Text>
-                         </View>
+                        <Text style={styles.questName}>{q.name}</Text>
+                        <View style={styles.questBadge}>
+                          <Text style={styles.questPts}>+{q.points}</Text>
+                        </View>
                       </TouchableOpacity>
                     ))}
-                    
-                    <TouchableOpacity 
-                      style={styles.toggleRankingButton} 
+
+                    <TouchableOpacity
+                      style={styles.toggleRankingButton}
                       onPress={() => setExpandedLeague(isExpanded ? null : league.id)}
                     >
                       <Text style={styles.toggleRankingText}>
-                        {isExpanded ? 'Ocultar Ranking' : 'Ver Tabla de Clasificación'}
+                        {isExpanded ? '▲ Ocultar Ranking' : '▼ Ver Tabla de Clasificación'}
                       </Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
-                {/* Tabla de Clasificación RPG */}
+                {/* Ranking */}
                 {isExpanded && (
                   <LeagueRanking
                     ranking={league.ranking}
@@ -384,22 +473,167 @@ export default function LeagueScreen() {
             );
           })
         )}
+
+        {/* Bottom spacer */}
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
 }
 
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 40,
+    paddingHorizontal: 16,
+    paddingTop: 48,
     paddingBottom: 60,
-    alignItems: 'center',
     flexGrow: 1,
   },
+  // ── Hero Banner ──────────────────────────────────────────────
+  heroBanner: {
+    width: '100%',
+    backgroundColor: 'rgba(30, 41, 59, 1)', // Fondo slate oscuro
+    borderWidth: 1.5,
+    borderColor: 'rgba(77, 97, 252, 0.4)',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 28,
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#4d61fc',
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  heroBannerGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  heroBannerGrid2px: {
+    width: 4, height: '100%',
+    backgroundColor: Colors.accent,
+    borderRadius: 4,
+    marginRight: 16,
+    minHeight: 64,
+  },
+  heroBannerLeft: { flex: 1 },
+  heroBannerRight: { marginLeft: 16 },
+  heroBannerEyebrow: {
+    fontSize: 10, fontWeight: '900',
+    color: Colors.accent, letterSpacing: 2.5,
+    textTransform: 'uppercase', marginBottom: 6,
+  },
+  heroBannerTitle: {
+    fontSize: 28, fontWeight: '900',
+    color: '#FFFFFF', letterSpacing: 1.2,
+  },
+  heroBannerSub: {
+    fontSize: 13, color: 'rgba(255,255,255,0.6)',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  levelBadge: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    borderWidth: 2.5, borderColor: Colors.accent,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: Colors.accent, shadowOpacity: 0.3, shadowRadius: 10,
+  },
+  levelBadgeNum: {
+    fontSize: 26, fontWeight: '900', color: '#FFFFFF',
+  },
+  levelBadgeLbl: {
+    fontSize: 8, fontWeight: '800', color: Colors.accent, letterSpacing: 1.5,
+  },
+  // ── Hero Banner Image Mode (member) ─────────────────────────
+  heroBannerImageRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20,
+  },
+  heroCoinWrap: {
+    width: 90, height: 90,
+    justifyContent: 'center', alignItems: 'center',
+    position: 'relative',
+  },
+  heroCoinLarge: { width: 88, height: 88 },
+  heroCoinGlow: {
+    position: 'absolute', width: 110, height: 110, borderRadius: 55,
+    backgroundColor: 'rgba(249,115,22,0.15)',
+    shadowColor: '#f97316', shadowOpacity: 0.5, shadowRadius: 20,
+  },
+  levelBadgeInline: {
+    marginTop: 8,
+    backgroundColor: 'rgba(249,115,22,0.15)',
+    borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.4)',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  levelBadgeInlineTxt: {
+    color: Colors.accent, fontSize: 11, fontWeight: '900', letterSpacing: 1,
+  },
+  // ── Hero Banner CTA mode (non-member) ─────────────────────────
+  heroBannerCTA: {
+    width: '100%',
+    backgroundColor: 'rgba(30, 41, 59, 1)',
+    borderWidth: 1.5, borderColor: 'rgba(77,97,252,0.4)',
+    borderRadius: 24, padding: 24, marginBottom: 28,
+    alignItems: 'center',
+    shadowColor: '#4d61fc', shadowOpacity: 0.2, shadowRadius: 15, elevation: 8,
+  },
+  ctaTitle: {
+    fontSize: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1, marginBottom: 8,
+  },
+  ctaSub: {
+    fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', lineHeight: 20, marginBottom: 20,
+  },
+  ctaTierRow: {
+    flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 16,
+  },
+  ctaTierCoin: { width: 56, height: 56 },
+  ctaHint: {
+    fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: '700',
+  },
+  xpRow: {
+    flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8,
+  },
+  xpLabel: {
+    fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.8)',
+  },
+  // ── Section Title ────────────────────────────────────────────
+  sectionTitle: {
+    fontSize: 14, fontWeight: '900', color: '#FFFFFF',
+    letterSpacing: 1, marginBottom: 16, marginTop: 12,
+    textTransform: 'uppercase',
+    borderLeftWidth: 3, borderLeftColor: Colors.primary,
+    paddingLeft: 12,
+  },
+  // ── Txn Chips ────────────────────────────────────────────────
+  txnGrid: {
+    flexDirection: 'row', gap: 12, marginBottom: 28,
+  },
+  txnChip: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.5, borderRadius: 18,
+    paddingVertical: 18, paddingHorizontal: 10,
+    alignItems: 'center', gap: 8,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  txnChipEmoji: { fontSize: 26 },
+  txnChipTxt: {
+    fontSize: 11, fontWeight: '800', textAlign: 'center', lineHeight: 15,
+  },
+  // ── Member badge ─────────────────────────────────────────────
+  memberBadge: {
+    backgroundColor: 'rgba(34,197,94,0.15)',
+    borderWidth: 1, borderColor: 'rgba(34,197,94,0.4)',
+    borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10,
+  },
+  memberBadgeTxt: {
+    color: '#4ADE80', fontSize: 10, fontWeight: '900', letterSpacing: 1,
+  },
+
   confettiOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9999,
@@ -484,126 +718,136 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   leagueCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
     padding: 24,
-    marginBottom: 26,
+    marginBottom: 28,
     width: '100%',
-    shadowColor: Colors.glowPrimary,
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
     overflow: 'hidden',
     position: 'relative'
   },
   leagueLocked: {
-    opacity: 0.6,
-    backgroundColor: '#1E1E24' // Color más gris/opaco
+    opacity: 0.7,
+    backgroundColor: '#0f172a'
   },
   timerRibbon: {
      position: 'absolute',
      top: 0,
      right: 0,
-     backgroundColor: 'rgba(249,115,22, 0.2)',
-     paddingHorizontal: 16,
-     paddingVertical: 4,
-     borderBottomLeftRadius: 12,
-     zIndex: 5
+     backgroundColor: 'rgba(245, 158, 11, 0.15)',
+     paddingHorizontal: 18,
+     paddingVertical: 6,
+     borderBottomLeftRadius: 16,
+     zIndex: 5,
+     borderLeftWidth: 1, borderBottomWidth: 1,
+     borderColor: 'rgba(245, 158, 11, 0.3)',
   },
   timerRibbonText: {
      color: Colors.accent,
-     fontSize: 12,
-     fontWeight: '800',
-     letterSpacing: 0.5
+     fontSize: 13,
+     fontWeight: '900',
+     letterSpacing: 0.6
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 8
+    marginBottom: 16,
+    marginTop: 10
   },
   coinWrapper: {
-    width: 50,
-    height: 50,
-    marginRight: 12,
+    width: 60,
+    height: 60,
+    marginRight: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 30,
   },
   coinImage: {
-    width: 55,
-    height: 55,
+    width: 64,
+    height: 64,
   },
   leagueInfoContainer: {
     flex: 1,
     justifyContent: 'center'
   },
   leagueName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.primary,
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1,
   },
   leagueLevel: {
     fontSize: 12,
-    color: Colors.tertiary,
+    color: Colors.accent,
     fontWeight: '800',
-    marginTop: 2,
-    textTransform: 'uppercase'
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   joinButton: {
     backgroundColor: Colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginLeft: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginLeft: 12,
+    shadowColor: Colors.primary, shadowOpacity: 0.4, shadowRadius: 8,
   },
   joinButtonLocked: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)'
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)'
   },
   joinButtonText: {
     color: '#FFF',
-    fontWeight: '800',
-    fontSize: 11,
+    fontWeight: '900',
+    fontSize: 12,
+    textTransform: 'uppercase',
   },
   joinTextLocked: {
-    color: 'rgba(255,255,255,0.5)'
+    color: 'rgba(255,255,255,0.4)'
   },
   leagueDesc: {
-    color: Colors.textSecondary,
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 20,
-    marginTop: 8
+    lineHeight: 22,
+    marginBottom: 24,
+    marginTop: 10
   },
   statsContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
     justifyContent: 'space-around',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   statBox: {
     alignItems: 'center',
+    flex: 1,
   },
   statLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 6,
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '900',
-    color: Colors.textPrimary,
+    color: '#FFFFFF',
   },
   questsContainer: {
     gap: 12,

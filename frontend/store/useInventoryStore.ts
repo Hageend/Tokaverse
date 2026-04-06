@@ -258,12 +258,27 @@ export const SLOT_RULES = {
 
 // ─── Mapeo de Clases y Estilos ────────────────────────────────────────────────
 const CLASS_WEAPON_STYLES: Record<string, WeaponStyle[]> = {
-  warrior: ['sword', 'physical'],
-  archer:  ['bow', 'physical'],
-  mage:    ['staff', 'card', 'physical'],
-  rogue:   ['dagger', 'physical'],
-  banker:  ['physical'],
-  kitsune: ['physical'],
+  warrior:    ['sword', 'physical'],
+  archer:     ['bow', 'physical'],
+  mage:       ['staff', 'card', 'physical'],
+  rogue:      ['dagger', 'physical'],
+  banker:     ['physical'],
+  kitsune:    ['staff', 'physical'],
+  thief:      ['dagger', 'physical'],
+  hacker:     ['card', 'physical'],
+  knight:     ['sword', 'physical'],
+  magedark:   ['staff', 'card'],
+  elf:        ['bow'],
+  maid:       ['physical', 'dagger'],
+  mermaid:    ['staff'],
+  witch:      ['staff', 'card'],
+  santa:      ['physical'],
+  leona:      ['sword'],
+  knigh_girl: ['sword'],
+  knigh_red:  ['sword'],
+  dog:        ['physical'],
+  cat:        ['physical', 'dagger'],
+  fox:        ['physical', 'staff'],
 };
 
 // ─── Mock items iniciales ───────────────────────────────────────────────────────
@@ -306,7 +321,8 @@ interface InventoryState {
   maxSlots:    number;
   addItem:     (drop: BossDropItem, bossName: string) => boolean;
   removeItem:  (id: string) => void;
-  equipItem:   (id: string) => void;
+  equipItem:   (id: string) => { success: boolean; message?: string };
+  validateEquippedItems: () => void;
   reduceDurability: (id: string, amount: number) => void;
   expandSlots: (amount: number) => void;
   hasItem:     (name: string) => boolean;
@@ -350,28 +366,54 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   },
 
   equipItem(id) {
+    let result = { success: true, message: '' };
     set(s => {
       const itemToEquip = s.items.find(i => i.id === id);
-      if (!itemToEquip) return s;
+      if (!itemToEquip) {
+        result = { success: false, message: 'Item no encontrado' };
+        return s;
+      }
 
       // Restricción de clase para armas
       if (itemToEquip.type === 'weapon' && itemToEquip.weaponStyle) {
         const { charClass } = usePlayerStore.getState();
         const allowedStyles = CLASS_WEAPON_STYLES[charClass] || ['physical'];
         if (!allowedStyles.includes(itemToEquip.weaponStyle)) {
-          // Podríamos lanzar una alerta aquí o simplemente ignorar
-          console.warn(`Tu clase ${charClass} no puede equipar estilo ${itemToEquip.weaponStyle}`);
+          result = { success: false, message: `Tu clase actual no puede equipar objetos de estilo ${itemToEquip.weaponStyle}.` };
           return s;
         }
       }
 
-      if (itemToEquip.type !== 'weapon' && itemToEquip.type !== 'protection' && itemToEquip.type !== 'card') return s;
+      if (itemToEquip.type !== 'weapon' && itemToEquip.type !== 'protection' && itemToEquip.type !== 'card') {
+        result = { success: false, message: 'Este item no se puede equipar.' };
+        return s;
+      }
 
       return {
         items: s.items.map(i => {
           if (i.id === id) return { ...i, isEquipped: !i.isEquipped };
           // Desequipar el anterior del mismo tipo
           if (i.type === itemToEquip.type && i.isEquipped) return { ...i, isEquipped: false };
+          return i;
+        })
+      };
+    });
+    return result;
+  },
+
+  validateEquippedItems() {
+    set(s => {
+      const { charClass } = usePlayerStore.getState();
+      const allowedStyles = CLASS_WEAPON_STYLES[charClass] || ['physical'];
+
+      return {
+        items: s.items.map(i => {
+          // Si es un arma y su estilo ya no es válido para la clase
+          if (i.isEquipped && i.type === 'weapon' && i.weaponStyle) {
+            if (!allowedStyles.includes(i.weaponStyle)) {
+              return { ...i, isEquipped: false };
+            }
+          }
           return i;
         })
       };

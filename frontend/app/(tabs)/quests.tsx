@@ -4,6 +4,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { InventoryModal } from '../../components/quest/InventoryModal';
+import { HeroCarousel3D } from '../../components/quest/HeroCarousel3D';
+import { CharacterStatusModal } from '../../components/quest/CharacterStatusModal';
 import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem, RARITY_COLORS } from '../../store/useInventoryStore';
 import { useAudioPlayer } from 'expo-audio';
 import { AdventurerCodex } from '../../components/quest/AdventurerCodex';
@@ -177,7 +179,15 @@ export default function QuestsScreen() {
   }, []);
 
   // ── Estado del personaje ───────────────────────────────────────────────
-  const [classIndex, setClassIndex] = useState(0);
+  const { 
+    starCoins, 
+    unlockedClasses, 
+    charClass: activeClassId,
+    setCharClass: setPlayerCharClass 
+  } = usePlayerStore();
+
+  const currentClass = JRPG_CLASSES.find(c => c.id === activeClassId) || JRPG_CLASSES[0];
+
   const level       = userProfile?.level ?? 1;
   const xp          = userProfile?.xp    ?? 0;
   const xpMax       = XP_THRESHOLDS[level]     ?? 100000;
@@ -207,11 +217,10 @@ export default function QuestsScreen() {
   const [showShop, setShowShop]           = useState(false);
 
   const { addItem: addInventoryItem, items: inventoryItems, maxSlots } = useInventoryStore();
-  const { starCoins, unlockedClasses, setCharClass: setPlayerCharClass } = usePlayerStore();
 
   // Filtrar solo las clases que el usuario ha desbloqueado
   const availableClasses = JRPG_CLASSES.filter(cls => unlockedClasses.includes(cls.id));
-  const currentClass = availableClasses[classIndex % availableClasses.length] || JRPG_CLASSES[0];
+
 
   // ─── ANIMACIONES 60FPS (Barras) ─────────────────────────────────────────
   const hpProgress   = useSharedValue(hp / hpMax);
@@ -576,83 +585,31 @@ export default function QuestsScreen() {
         </View>
       </Modal>
 
+
       {/* ━━ MODAL: Estado del Personaje ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <Modal visible={showStatusModal} animationType="fade" transparent>
-        <View style={S.overlay}>
-          <View style={S.modalBox}>
-            <View style={S.modalHdr}>
-              <Text style={S.modalTitle}>Estado del Personaje</Text>
-              <TouchableOpacity
-                onPress={() => setShowStatus(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Cerrar"
-              >
-                <Ionicons name="close-circle" size={28} color="rgba(255,255,255,0.6)" />
-              </TouchableOpacity>
-            </View>
-            <Text style={S.modalSub}>Selecciona tu Aventurero (Solo desbloqueados):</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 16 }}>
-              {availableClasses.map((cls) => {
-                  const selectedIdx = JRPG_CLASSES.findIndex(c => c.id === cls.id);
-                  const isActive = classIndex === selectedIdx;
-                  return (
-                    <TouchableOpacity
-                      key={cls.id}
-                      style={[
-                        S.classCard, 
-                        isActive && S.classCardActive,
-                      ]}
-                      onPress={() => {
-                        if (selectedIdx !== -1) {
-                          setClassIndex(selectedIdx);
-                          setPlayerCharClass(cls.id as any);
-                          setShowStatus(false);
-                        }
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      {isActive && (
-                        <View style={S.activeTag}>
-                          <Text style={S.activeTagTxt}>ACTIVO</Text>
-                        </View>
-                      )}
-                      
-                      <Image
-                        source={typeof cls.sprite === 'number' ? cls.sprite : { uri: cls.sprite }}
-                        style={[
-                          S.classImg, 
-                          Platform.OS === 'web' && { imageRendering: 'pixelated' } as any,
-                        ]}
-                        contentFit="contain"
-                        cachePolicy="memory-disk"
-                      />
-                      <Text style={S.className}>{cls.name}</Text>
-                      <Text style={S.classSubtitle}>{cls.subtitle}</Text>
-                      <Text style={S.classStat}>Stat: {cls.stat}</Text>
-                      <View style={S.bonusBadge}>
-                        <Text style={S.bonusTxt}>{cls.bonus}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-              })}
-            </ScrollView>
-            <View style={S.divider} />
-            <View style={S.statsGrid}>
-              {[
-                { lbl: 'HP',  val: `${hp}/${hpMax}`,   color: '#EF4444' },
-                { lbl: 'MP',  val: `${mana}/${manaMax}`, color: '#3B82F6' },
-                { lbl: 'NIV', val: `${level}`,           color: Colors.primary },
-                { lbl: 'XP',  val: `${xp}`,              color: '#F59E0B' },
-              ].map(s => (
-                <View key={s.lbl} style={S.statBox}>
-                  <Text style={[S.statLbl, { color: s.color }]}>{s.lbl}</Text>
-                  <Text style={S.statVal}>{s.val}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <CharacterStatusModal
+        visible={showStatusModal}
+        heroes={JRPG_CLASSES as any}
+        unlockedClasses={unlockedClasses}
+        activeHeroId={currentClass.id}
+        hp={hp} hpMax={hpMax}
+        mana={mana} manaMax={manaMax}
+        level={level}
+        xp={xp} xpMax={xpMax}
+        multiplier={multiplier}
+        defenseStreak={defenseStreak}
+        onSelectHero={(cls: any) => {
+          if (unlockedClasses.includes(cls.id)) {
+            setPlayerCharClass(cls.id);
+            // Validar equipo tras cambio de clase
+            useInventoryStore.getState().validateEquippedItems();
+          } else {
+            Alert.alert('❄️ Clase Bloqueada', 'Debes adquirir este conocimiento en el Códice de Aventureros.');
+          }
+        }}
+        onClose={() => setShowStatus(false)}
+      />
+
 
       {/* ━━ CONTENIDO PRINCIPAL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <ScrollView contentContainerStyle={S.scroll} showsVerticalScrollIndicator={false}>

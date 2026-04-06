@@ -29,6 +29,8 @@ import { EnemyMapper } from '../utils/EnemyMapper';
 // Components
 import { DamageNumber } from './quest/DamageNumber';
 import CharacterAvatar from './CharacterAvatar';
+import TrophyDefeatAnimation from './quest/TrophyDefeatAnimation';
+import { LootDropModal, LootDropDisplay } from './quest/LootDropModal';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -222,11 +224,14 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const [isHeroAttacking, setHeroAttacking] = useState(false);
   const [isHeroHit, setHeroHit] = useState(false);
   const [showBag, setShowBag] = useState(false);
+  const [animatingVictory, setAnimatingVictory] = useState(false);
 
   const inventory = useInventoryStore(s => s.items);
   const consumables = useMemo(() => inventory.filter(i => i.type === 'consumable'), [inventory]);
 
   const [victoryRewards, setVictoryRewards] = useState<{ xp: number, starCoins: number, items: BossDropItem[], inventoryFull?: boolean } | null>(null);
+  const [showLootModal, setShowLootModal] = useState(false);
+  const [lootData, setLootData] = useState<LootDropDisplay | null>(null);
 
   const combatPlayer = useAudioPlayer(COMBAT_TRACKS[Math.floor(Math.random() * 6)]);
   useEffect(() => {
@@ -268,6 +273,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
       setTimeout(() => setHeroAttacking(false), 600);
       if (next.phase === 'victory') {
         flash.value = withSequence(withTiming(1, { duration: 50 }), withTiming(0, { duration: 300 }));
+        setAnimatingVictory(true); // <--- Nueva animación de trofeo solicitada
         
         // Mobb vs Boss check
         const isMob = next.boss.skills.length <= 2;
@@ -295,6 +301,18 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
         usePlayerStore.getState().addStarCoins(starCoins);
         
         setVictoryRewards({ xp, starCoins, items: finalItems, inventoryFull: invFull });
+
+        // Colectar el drop aleatorio también
+        const randomDrop = selectRandomDrop(bossIdRaw);
+
+        // Mostrar LootDropModal con fan animation
+        setLootData({
+          guaranteed: drop ?? { icon: '🧪', name: 'Poción Menor', rarity: 'common', type: 'consumable' },
+          random: randomDrop,
+          bossName: next.boss.name,
+        });
+        setShowLootModal(true);
+
         setTimeout(() => props.onVictory?.(next.boss), 5000); 
       }
     } finally { busyRef.current = false; setBusy(false); }
@@ -321,49 +339,59 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const isVic = state.phase === 'victory';
   const isDef = state.phase === 'defeat';
 
+  if (animatingVictory) {
+    return <TrophyDefeatAnimation onFinish={() => setAnimatingVictory(false)} />;
+  }
+
   if (isVic && victoryRewards) {
     return (
       <View style={endStyles.screen}>
         {isVic && <LottieView source={require('../assets/confetti.json')} autoPlay loop={false} style={StyleSheet.absoluteFill} />}
-        <Animated.View entering={FadeInUp.springify()} style={endStyles.resBox}>
-          <Text style={endStyles.resTitle}>🏆 ¡VICTORIA!</Text>
-          
-          {victoryRewards.inventoryFull && (
-            <Animated.View entering={FadeIn} style={endStyles.fullWarning}>
-              <Text style={endStyles.fullWarningText}>⚠️ INVENTARIO LLENO. No se pudo guardar el botín.</Text>
-            </Animated.View>
-          )}
 
-          <View style={endStyles.lootHexGrid}>
-            {victoryRewards.items.map((item, idx) => (
-              <View key={`${item.name}-${idx}`} style={endStyles.lootItem}>
-                <View style={[endStyles.lootIconBox, { borderColor: RARITY_COLORS[item.rarity] }]}>
-                   <Image source={ITEM_SPRITES[item.pixelArt as keyof typeof ITEM_SPRITES] || { uri: item.icon }} style={endStyles.lootImg} />
-                </View>
-                <Text style={endStyles.lootName} numberOfLines={1}>{item.name}</Text>
-              </View>
-            ))}
-          </View>
+        {/* LootDropModal reemplaza la pantalla básica de loot */}
+        <LootDropModal
+          visible={showLootModal}
+          loot={lootData}
+          onClaim={(guaranteed, random) => {
+            // Añadir drops al inventario si no se añadieron aún
+            const store = useInventoryStore.getState();
+            if (!victoryRewards.items.find(i => i.name === guaranteed.name)) {
+              store.addItem(guaranteed as any, lootData?.bossName ?? 'Jefe');
+            }
+            if (random) store.addItem(random as any, lootData?.bossName ?? 'Jefe');
+            setShowLootModal(false);
+          }}
+          onClose={() => setShowLootModal(false)}
+        />
 
-          <View style={endStyles.xpRow}>
-            <Text style={endStyles.xpLabel}>EXPERIENCIA</Text>
-            <Text style={endStyles.xpVal}>+{victoryRewards.xp} XP</Text>
-          </View>
+        {!showLootModal && (
+          <Animated.View entering={FadeInUp.springify()} style={endStyles.resBox}>
+            <Text style={endStyles.resTitle}>🏆 ¡VICTORIA!</Text>
 
-          <View style={[endStyles.xpRow, { marginTop: -8 }]}>
-            <Text style={endStyles.xpLabel}>ESTRELLAS OBTENIDAS</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Image source={COIN_SPRITES.star} style={{ width: 14, height: 14 }} />
-              <Text style={[endStyles.xpVal, { color: '#FFD700' }]}>+{victoryRewards.starCoins}</Text>
+            {victoryRewards.inventoryFull && (
+              <Animated.View entering={FadeIn} style={endStyles.fullWarning}>
+                <Text style={endStyles.fullWarningText}>⚠️ INVENTARIO LLENO. No se pudo guardar el botín.</Text>
+              </Animated.View>
+            )}
+
+            <View style={endStyles.xpRow}>
+              <Text style={endStyles.xpLabel}>EXPERIENCIA</Text>
+              <Text style={endStyles.xpVal}>+{victoryRewards.xp} XP</Text>
             </View>
-          </View>
 
-          {/* Botón de continuación */}
+            <View style={[endStyles.xpRow, { marginTop: -8 }]}>
+              <Text style={endStyles.xpLabel}>ESTRELLAS OBTENIDAS</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Image source={COIN_SPRITES.star} style={{ width: 14, height: 14 }} />
+                <Text style={[endStyles.xpVal, { color: '#FFD700' }]}>+{victoryRewards.starCoins}</Text>
+              </View>
+            </View>
 
-          <TouchableOpacity style={endStyles.continueBtn} onPress={props.onExit}>
-            <Text style={endStyles.btnTxt}>ACEPTAR Y VOLVER</Text>
-          </TouchableOpacity>
-        </Animated.View>
+            <TouchableOpacity style={endStyles.continueBtn} onPress={props.onExit}>
+              <Text style={endStyles.btnTxt}>ACEPTAR Y VOLVER</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
       </View>
     );
   }
