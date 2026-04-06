@@ -172,6 +172,13 @@ export const spinRewards = pgTable('spin_rewards', {
     isActive: boolean('is_active').default(true).notNull(), // Filtro de disponibilidad
 });
 
+export const shopItems = pgTable('shop_items', {
+    id: serial('id').primaryKey(),
+    itemId: integer('item_id').references(() => items.id, { onDelete: 'cascade' }).notNull(),
+    priceCoins: integer('price_coins').notNull(), // Costo en TokaCoins
+    isActive: boolean('is_active').default(true).notNull(), // Determina si está a la venta hoy
+});
+
 // ==========================================
 // 3. DEFINICIÓN DE RELACIONES
 // ==========================================
@@ -251,6 +258,13 @@ export const questsProgressRelations = relations(questsProgress, ({ one }) => ({
 export const enemiesRelations = relations(enemies, ({ one }) => ({
     dropItem: one(items, {
         fields: [enemies.rewardItemId],
+        references: [items.id],
+    }),
+}));
+
+export const shopItemsRelations = relations(shopItems, ({ one }) => ({
+    item: one(items, {
+        fields: [shopItems.itemId],
         references: [items.id],
     }),
 }));

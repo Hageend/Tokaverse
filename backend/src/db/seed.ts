@@ -15,7 +15,8 @@ import {
     items,
     userInventory,
     spinRewards,
-    enemies
+    enemies,
+    shopItems
 } from './schema';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '../.env' });
@@ -142,6 +143,17 @@ async function main() {
         { name: 'Slime de las Deudas', hp: 50, attack: 5, defense: 2, rewardXp: 20, rewardCoins: 10, iconUrl: '/enemies/slime.png' },
         { name: 'Gólem de la Inflación', hp: 300, attack: 25, defense: 15, rewardXp: 150, rewardCoins: 100, rewardItemId: insertedItems[1].id, iconUrl: '/enemies/golem.png' },
         { name: 'Dragón del Buró (Jefe Mutante)', hp: 1000, attack: 70, defense: 40, rewardXp: 1000, rewardCoins: 500, rewardItemId: insertedItems[0].id, iconUrl: '/enemies/dragon.png' },
+    ]);
+
+    // 12. Tienda de Objetos (Shop)
+    console.log('--> Abriendo la Tienda TokaVerse...');
+    await db.insert(shopItems).values([
+        // Pociones y equipamiento intermedio para comprar con monedas
+        { itemId: insertedItems[3].id, priceCoins: 50, isActive: true }, // Poción Mayor de Vida
+        { itemId: insertedItems[4].id, priceCoins: 20, isActive: true }, // Poción Menor de Maná
+        { itemId: insertedItems[1].id, priceCoins: 300, isActive: true }, // Escudo Toka (más caro)
+        // La espada mítica está en la BD pero no a la venta (Solo loot/ruleta)
+        { itemId: insertedItems[0].id, priceCoins: 9999, isActive: false },
     ]);
 
     console.log('Base de datos lista.');
