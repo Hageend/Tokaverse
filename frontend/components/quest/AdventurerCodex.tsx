@@ -333,7 +333,10 @@ export function AdventurerCodex({ visible, onClose }: { visible: boolean; onClos
             durability: 20, maxDurability: 20, description: 'Objeto adquirido en el Códice.',
         };
         const ok = useInventoryStore.getState().addItem(invItem as any, 'Códice');
-        if (ok) { addStarCoins(-item.price); triggerSuccess({ id: item.id, name: item.name, type: 'item', pixelArt: item.id }); }
+        if (ok) { 
+            addStarCoins(-item.price); 
+            triggerSuccess({ id: item.id, name: item.name, type: 'item', pixelArt: item.id, sprite: item.sprite }); 
+        }
         else Alert.alert('⚠️ Inventario Lleno', 'No tienes espacio.');
     };
 
@@ -347,7 +350,10 @@ export function AdventurerCodex({ visible, onClose }: { visible: boolean; onClos
             type: 'card', pixelArt: c.id, icon: c.icon, description: 'Carta del Códice.',
         };
         const ok = useInventoryStore.getState().addItem(invCard as any, 'Códice');
-        if (ok) { addStarCoins(-c.price); triggerSuccess({ id: c.id, name: c.name, type: 'card', pixelArt: c.id }); }
+        if (ok) { 
+            addStarCoins(-c.price); 
+            triggerSuccess({ id: c.id, name: c.name, type: 'card', pixelArt: c.id, sprite: c.sprite }); 
+        }
         else Alert.alert('⚠️ Sin Espacio', 'Libera espacio en tu inventario.');
     };
 
