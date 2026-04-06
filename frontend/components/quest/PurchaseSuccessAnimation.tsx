@@ -1,13 +1,13 @@
 // components/quest/PurchaseSuccessAnimation.tsx
-// Animación orbital atómica premium — la imagen del ítem ES el núcleo
+// Animación orbital atómica premium — Estilo "Atomic Nucleus" inspirado en CSS
 
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, {
     useSharedValue, useAnimatedStyle,
     withRepeat, withTiming, withSequence, withDelay, withSpring,
-    Easing, FadeIn, FadeOut, ZoomIn, SlideInUp,
+    Easing, FadeIn, FadeOut, SlideInUp,
 } from 'react-native-reanimated';
 import { CHAR_SPRITES, ITEM_SPRITES } from '../../data/classSkills';
 
@@ -25,24 +25,36 @@ interface PurchaseSuccessProps {
     onClose: () => void;
 }
 
-// ─── Un anillo orbitando — cada uno con eje 3D diferente ─────────────────────
+const C = {
+    pink: '#fe53bb',
+    purple: '#8f51ea',
+    blue: '#0044ff',
+    bg: 'rgba(2, 4, 15, 0.98)',
+};
+
+// ─── Un anillo orbital 3D ───────────────────────────────────────────────────
 const Ring = ({
-    size, color, duration, rotX = 50, rotY = 0, startDeg = 0, borderWidth = 10,
+    size, color, duration, rotX = 0, rotY = 0, startDeg = 0, borderWidth = 8, isInverse = false
 }: {
     size: number; color: string; duration: number;
     rotX?: number; rotY?: number; startDeg?: number; borderWidth?: number;
+    isInverse?: boolean;
 }) => {
     const deg = useSharedValue(startDeg);
+
     useEffect(() => {
         deg.value = withRepeat(
-            withTiming(startDeg + 360, { duration, easing: Easing.linear }),
-            -1, false,
+            withTiming(isInverse ? startDeg - 360 : startDeg + 360, { 
+                duration, 
+                easing: Easing.bezier(0.42, 0, 0.58, 1) // ease-in-out
+            }),
+            -1, false
         );
     }, []);
 
     const style = useAnimatedStyle(() => ({
         transform: [
-            { perspective: 600 },
+            { perspective: 800 },
             { rotateX: `${rotX}deg` },
             { rotateY: `${rotY}deg` },
             { rotateZ: `${deg.value}deg` },
@@ -55,9 +67,9 @@ const Ring = ({
             borderBottomColor: color,
             borderBottomWidth: borderWidth,
             shadowColor: color,
-            shadowOpacity: 0.9,
-            shadowRadius: 12,
-            elevation: 8,
+            shadowOpacity: 0.8,
+            shadowRadius: 10,
+            elevation: 10,
         }, style]} />
     );
 };
@@ -66,140 +78,135 @@ const ringBase = StyleSheet.create({
     r: {
         position: 'absolute',
         borderRadius: 999,
-        borderColor: 'transparent',
-        borderStyle: 'solid',
+        backgroundColor: 'transparent',
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderTopColor: 'transparent',
     },
 }).r;
 
-// ─── Partícula flotante ───────────────────────────────────────────────────────
-const Particle = ({ color, delay, x, y }: { color: string; delay: number; x: number; y: number }) => {
+// ─── Partículas de Luz ───────────────────────────────────────────────────────
+const LightParticle = ({ color, delay, x, y }: { color: string; delay: number; x: number; y: number }) => {
     const opacity = useSharedValue(0);
-    const ty = useSharedValue(0);
+    const scale = useSharedValue(0.5);
+
     useEffect(() => {
         opacity.value = withDelay(delay, withRepeat(withSequence(
-            withTiming(1, { duration: 600 }),
-            withTiming(0, { duration: 800 }),
-            withTiming(0, { duration: 600 }),
+            withTiming(1, { duration: 1000 }),
+            withTiming(0, { duration: 1000 }),
         ), -1, false));
-        ty.value = withDelay(delay, withRepeat(
-            withTiming(-30, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-            -1, true,
-        ));
+        scale.value = withDelay(delay, withRepeat(withSequence(
+            withTiming(1.2, { duration: 1000 }),
+            withTiming(0.8, { duration: 1000 }),
+        ), -1, true));
     }, []);
+
     const style = useAnimatedStyle(() => ({
         opacity: opacity.value,
-        transform: [{ translateX: x }, { translateY: y + ty.value }],
+        transform: [{ translateX: x }, { translateY: y }, { scale: scale.value }],
     }));
-    return (
-        <Animated.View style={[S.particle, { backgroundColor: color, shadowColor: color }, style]} />
-    );
+
+    return <Animated.View style={[S.particle, { backgroundColor: color, shadowColor: color }, style]} />;
 };
 
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 export const PurchaseSuccessAnimation = ({ item, onClose }: PurchaseSuccessProps) => {
-    const orbScale   = useSharedValue(0);
-    const ringOpacity = useSharedValue(0);
+    const nucleusScale = useSharedValue(0);
     const nucleusPulse = useSharedValue(1);
 
     useEffect(() => {
-        // Entrada orbital
-        orbScale.value = withSpring(1, { damping: 12, stiffness: 80 });
-        ringOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
-        // Pulso del núcleo
-        nucleusPulse.value = withDelay(400, withRepeat(
+        nucleusScale.value = withSpring(1, { damping: 12, stiffness: 90 });
+        nucleusPulse.value = withDelay(500, withRepeat(
             withSequence(
-                withTiming(1.12, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-                withTiming(1,    { duration: 900, easing: Easing.inOut(Easing.ease) }),
-            ), -1, true,
+                withTiming(1.15, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+                withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+            ), -1, true
         ));
-        const timer = setTimeout(onClose, 5000);
+
+        // Auto-close opcional tras 8s si el usuario no interactúa
+        const timer = setTimeout(onClose, 8000);
         return () => clearTimeout(timer);
     }, []);
 
-    const orbStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: orbScale.value }],
-        opacity: orbScale.value,
-    }));
-    const ringStyle = useAnimatedStyle(() => ({ opacity: ringOpacity.value }));
-    const pulseStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: nucleusPulse.value }],
+    const nucleusStyle = useAnimatedStyle(() => ({
+        transform: [
+            { scale: nucleusScale.value * nucleusPulse.value }
+        ],
     }));
 
     // ── Resolver imagen ──────────────────────────────────────────────────────
-    const renderItemVisual = () => {
+    const renderContent = () => {
+        // 1. Si es un héroe (clase)
         if (item.type === 'hero') {
-            const src = (CHAR_SPRITES as any)[item.id];
-            if (src) return <Image source={src} style={S.nucleusImg} contentFit="contain" />;
+            const src = (CHAR_SPRITES as any)[item.id] || CHAR_SPRITES.hero_base;
+            return <Image source={src} style={S.nucleusImg} contentFit="contain" />;
         }
+        
+        // 2. Si se pasó el sprite directamente (desde SHOP_ITEMS)
         if (item.sprite) {
             return <Image source={item.sprite} style={S.nucleusImg} contentFit="contain" />;
         }
+        
+        // 3. Intento por ID (pixelArt) con y sin prefijo 'item_'
         if (item.pixelArt) {
-            const src = (ITEM_SPRITES as any)[item.pixelArt];
+            const cleanId = item.pixelArt.replace('item_', '');
+            const src = (ITEM_SPRITES as any)[item.pixelArt] || (ITEM_SPRITES as any)[cleanId];
             if (src) return <Image source={src} style={S.nucleusImg} contentFit="contain" />;
         }
-        return <Text style={S.nucleusEmoji}>{item.icon ?? '✨'}</Text>;
+        
+        return <Text style={S.nucleusEmoji}>{item.icon ?? '⭐'}</Text>;
     };
 
-    // Label según tipo
-    const typeLabel = item.type === 'hero' ? '⚔️ CLASE DESBLOQUEADA' :
-                      item.type === 'card' ? '🎴 CARTA ADQUIRIDA' : '🧪 OBJETO ADQUIRIDO';
+    const typeLabel = item.type === 'hero' ? 'NUEVO AVENTURERO' :
+                      item.type === 'card' ? 'CARTA LEGENDARIA' : 'OBJETO ADQUIRIDO';
 
     return (
-        <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(300)} style={S.overlay}>
+        <Animated.View entering={FadeIn.duration(300)} exiting={FadeOut.duration(300)} style={S.overlay}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
 
-            {/* ── Partículas de fondo ── */}
-            {[
-                { color: '#fe53bb', delay: 0,    x: -90,  y: -60  },
-                { color: '#8f51ea', delay: 300,  x: 80,   y: -80  },
-                { color: '#0055ff', delay: 600,  x: -70,  y: 70   },
-                { color: '#fe53bb', delay: 900,  x: 100,  y: 50   },
-                { color: '#8f51ea', delay: 200,  x: -110, y: 20   },
-                { color: '#0055ff', delay: 700,  x: 60,   y: 100  },
-            ].map((p, i) => <Particle key={i} {...p} />)}
+            {/* Partículas */}
+            <LightParticle color={C.pink} delay={0} x={-120} y={-100} />
+            <LightParticle color={C.purple} delay={400} x={130} y={-80} />
+            <LightParticle color={C.blue} delay={800} x={-100} y={150} />
+            <LightParticle color={C.pink} delay={1200} x={110} y={120} />
 
-            {/* ── Órbita atómica ── */}
-            <Animated.View style={[S.orbScene, orbStyle]}>
-                <Animated.View style={ringStyle}>
-                    {/* Anillos internos pequeños */}
-                    <Ring size={180} color="#fe53bb" duration={1200} rotX={50} rotY={0}   startDeg={0}   borderWidth={8} />
-                    <Ring size={180} color="#8f51ea" duration={1600} rotX={20} rotY={50}  startDeg={120} borderWidth={8} />
-                    <Ring size={180} color="#0055ff" duration={2000} rotX={40} rotY={130} startDeg={240} borderWidth={8} />
+            {/* ── ESCENA ORBITAL ── */}
+            <View style={S.orbScene}>
+                {/* Anillos Pequeños (190px en CSS) */}
+                <Ring size={190} color={C.pink}   duration={1000} rotX={50} rotY={0}   startDeg={110} />
+                <Ring size={190} color={C.purple} duration={1400} rotX={20} rotY={50}  startDeg={20} />
+                <Ring size={190} color={C.blue}   duration={1800} rotX={40} rotY={130} startDeg={450} isInverse />
 
-                    {/* Anillos externos grandes */}
-                    <Ring size={320} color="#fe53bb" duration={3200} rotX={50} rotY={0}   startDeg={180} borderWidth={14} />
-                    <Ring size={320} color="#8f51ea" duration={4000} rotX={20} rotY={50}  startDeg={300} borderWidth={14} />
-                    <Ring size={320} color="#0055ff" duration={3600} rotX={40} rotY={130} startDeg={60}  borderWidth={14} />
-                </Animated.View>
+                {/* Anillos Grandes (380px en CSS) */}
+                <Ring size={340} color={C.pink}   duration={2500} rotX={50} rotY={0}   startDeg={470} isInverse borderWidth={12} />
+                <Ring size={340} color={C.purple} duration={3000} rotX={20} rotY={50}  startDeg={380} isInverse borderWidth={12} />
+                <Ring size={340} color={C.blue}   duration={3500} rotX={40} rotY={130} startDeg={90}  borderWidth={12} />
 
-                {/* ── NÚCLEO = IMAGEN DEL ITEM ── */}
-                <Animated.View style={[S.nucleusShell, pulseStyle]}>
-                    {/* Glow orbs detrás del núcleo */}
-                    <View style={[S.glowOrb, { backgroundColor: '#fe53bb', shadowColor: '#fe53bb' }]} />
-                    <View style={[S.glowOrb, { backgroundColor: '#8f51ea', shadowColor: '#8f51ea', opacity: 0.6 }]} />
-                    {/* Imagen */}
+                {/* ── NÚCLEO (Imagen) ── */}
+                <Animated.View style={[S.nucleusContainer, nucleusStyle]}>
+                    {/* Resplandores de fondo */}
+                    <View style={[S.nucleusGlow, { backgroundColor: C.pink, shadowColor: C.pink }]} />
+                    <View style={[S.nucleusGlow, { backgroundColor: C.purple, shadowColor: C.purple, transform: [{ scale: 1.2 }] }]} />
+                    
                     <View style={S.nucleusBg}>
-                        {renderItemVisual()}
+                        {renderContent()}
                     </View>
                 </Animated.View>
-            </Animated.View>
+            </View>
 
-            {/* ── Tarjeta flotante debajo ── */}
-            <Animated.View entering={SlideInUp.delay(600).springify().damping(16)} style={S.infoCard}>
-                {/* Tipo */}
-                <Text style={S.typeLabel}>{typeLabel}</Text>
-                {/* Nombre */}
-                <Text style={S.itemName} numberOfLines={2}>{item.name.toUpperCase()}</Text>
-                {/* Destellos en divisor */}
+            {/* ── INFO CARD ── */}
+            <Animated.View entering={SlideInUp.delay(800).springify()} style={S.infoCard}>
+                <Text style={S.typeText}>{typeLabel}</Text>
+                <Text style={S.itemName}>{item.name.toUpperCase()}</Text>
+                
                 <View style={S.dividerRow}>
-                    <View style={S.divLine} />
-                    <Text style={S.divStar}>✦</Text>
-                    <View style={S.divLine} />
+                    <View style={S.line} />
+                    <Text style={S.star}>✦</Text>
+                    <View style={S.line} />
                 </View>
-                {/* Botón */}
-                <TouchableOpacity style={S.continueBtn} onPress={onClose} activeOpacity={0.8}>
-                    <Text style={S.continueBtnTxt}>✓ CONTINUAR</Text>
+
+                <TouchableOpacity style={S.btn} onPress={onClose} activeOpacity={0.7}>
+                    <Text style={S.btnTxt}>SAGA CONTINÚA</Text>
                 </TouchableOpacity>
             </Animated.View>
         </Animated.View>
@@ -207,138 +214,120 @@ export const PurchaseSuccessAnimation = ({ item, onClose }: PurchaseSuccessProps
 };
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
-const NUCLEUS_SIZE = 120;
-
 const S = StyleSheet.create({
     overlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(2, 4, 20, 0.97)',
+        backgroundColor: C.bg,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 99999,
-        gap: 32,
     },
     orbScene: {
-        width: 340,
-        height: 340,
+        width: 380,
+        height: 380,
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: 40,
     },
-
-    // ── Núcleo ────────────────────────────────────────────────────────
-    nucleusShell: {
+    nucleusContainer: {
+        width: 130,
+        height: 130,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    nucleusGlow: {
         position: 'absolute',
-        width: NUCLEUS_SIZE,
-        height: NUCLEUS_SIZE,
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 50,
-    },
-    glowOrb: {
-        position: 'absolute',
-        width: NUCLEUS_SIZE + 20,
-        height: NUCLEUS_SIZE + 20,
-        borderRadius: (NUCLEUS_SIZE + 20) / 2,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.7,
-        shadowRadius: 40,
-        elevation: 15,
-        opacity: 0.35,
-    },
-    nucleusBg: {
-        width: NUCLEUS_SIZE,
-        height: NUCLEUS_SIZE,
-        borderRadius: NUCLEUS_SIZE / 2,
-        backgroundColor: 'rgba(10, 5, 25, 0.9)',
-        borderWidth: 3,
-        borderColor: 'rgba(254, 83, 187, 0.7)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#fe53bb',
+        width: 100, height: 100,
+        borderRadius: 50,
+        opacity: 0.4,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 1,
         shadowRadius: 30,
         elevation: 20,
+    },
+    nucleusBg: {
+        width: 120, height: 120,
+        borderRadius: 60,
+        backgroundColor: '#050510',
+        borderWidth: 3,
+        borderColor: C.pink,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: C.pink,
+        shadowOpacity: 0.8,
+        shadowRadius: 20,
+        elevation: 10,
         overflow: 'hidden',
     },
     nucleusImg: {
-        width: NUCLEUS_SIZE - 16,
-        height: NUCLEUS_SIZE - 16,
+        width: 90, height: 90,
     },
     nucleusEmoji: {
-        fontSize: 60,
+        fontSize: 50,
     },
-
-    // ── Partículas ────────────────────────────────────────────────────
     particle: {
         position: 'absolute',
-        width: 8, height: 8,
-        borderRadius: 4,
+        width: 6, height: 6,
+        borderRadius: 3,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 1,
-        shadowRadius: 8,
+        shadowRadius: 6,
         elevation: 5,
     },
-
-    // ── Info card ─────────────────────────────────────────────────────
     infoCard: {
-        width: Math.min(SW * 0.80, 320),
-        backgroundColor: 'rgba(15, 10, 35, 0.95)',
-        borderRadius: 20,
-        borderWidth: 1.5,
-        borderColor: 'rgba(143, 81, 234, 0.5)',
-        padding: 20,
         alignItems: 'center',
-        shadowColor: '#8f51ea',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 24,
-        elevation: 12,
+        backgroundColor: 'rgba(10, 10, 25, 0.9)',
+        padding: 24,
+        borderRadius: 24,
+        width: SW * 0.85,
+        borderWidth: 1,
+        borderColor: 'rgba(254, 83, 187, 0.3)',
         gap: 8,
+        ...Platform.select({
+            ios: { shadowColor: C.pink, shadowOpacity: 0.3, shadowRadius: 20 },
+            android: { elevation: 15 }
+        }),
     },
-    typeLabel: {
-        color: '#8f51ea',
+    typeText: {
+        color: C.purple,
         fontSize: 10,
         fontWeight: '900',
-        letterSpacing: 3,
+        letterSpacing: 2,
     },
     itemName: {
-        color: '#ffffff',
-        fontSize: 22,
+        color: '#fff',
+        fontSize: 24,
         fontWeight: '900',
         textAlign: 'center',
-        letterSpacing: 2,
-        textShadowColor: '#fe53bb',
-        textShadowRadius: 10,
-        lineHeight: 28,
+        textShadowColor: C.pink,
+        textShadowRadius: 8,
     },
     dividerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
         width: '100%',
+        marginVertical: 4,
     },
-    divLine: {
+    line: {
         flex: 1, height: 1,
-        backgroundColor: 'rgba(143, 81, 234, 0.35)',
+        backgroundColor: 'rgba(255,255,255,0.1)',
     },
-    divStar: {
-        color: '#8f51ea',
-        fontSize: 14,
-    },
-    continueBtn: {
-        marginTop: 4,
-        backgroundColor: 'rgba(143, 81, 234, 0.2)',
-        borderWidth: 1.5,
-        borderColor: 'rgba(143, 81, 234, 0.7)',
+    star: { color: C.purple, fontSize: 16 },
+    btn: {
+        marginTop: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 40,
+        backgroundColor: 'rgba(143, 81, 234, 0.15)',
         borderRadius: 30,
-        paddingVertical: 10,
-        paddingHorizontal: 36,
+        borderWidth: 2,
+        borderColor: C.purple,
     },
-    continueBtnTxt: {
-        color: '#c084fc',
+    btnTxt: {
+        color: '#fff',
         fontWeight: '900',
-        fontSize: 13,
+        fontSize: 12,
         letterSpacing: 2,
     },
 });
