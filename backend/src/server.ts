@@ -1,13 +1,20 @@
 import Fastify from 'fastify';
-import socketio from 'socket.io';
+import cors from '@fastify/cors';
+import { spinsRoutes } from './routes/spins';
 
 const fastify = Fastify({ logger: true });
+
+// CORS para frontend Expo
+fastify.register(cors, { origin: true });
+
+// Rutas
+fastify.register(spinsRoutes);
 
 fastify.get('/status', async () => {
     return { status: 'TokaVerse API Running', version: '1.0.0' };
 });
 
-fastify.get('/', async (request, reply) => {
+fastify.get('/', async () => {
     return {
         message: "Bienvenido a TOKAVERSE API",
         status: "online",
