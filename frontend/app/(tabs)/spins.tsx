@@ -1,21 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Text, StyleSheet, ScrollView } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import Ruleta from '../../components/navigation/Ruleta';
-import CartaRecompensa from '../../components/navigation/CartaRecompensa';
-import RewardCard from '../../components/navigation/CartaRecompensa';
+
 export default function SpinsScreen() {
-  const [premio, setPremio] = useState<string | null>(null);
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Ruleta TOKA</Text>
-      <Text style={styles.subtitle}>Gira la ruleta y obtén premios</Text>
-
-      {/*RUEDA */}
-      <Ruleta onResult={setPremio} />
-
-      {/*RECOMPENSA*/}
-      {premio && <RewardCard premio={premio} />}
+      <Text style={styles.title}>Spins</Text>
+      <Text style={styles.subtitle}>Spin the wheel & win prizes</Text>
     </ScrollView>
   );
 }
