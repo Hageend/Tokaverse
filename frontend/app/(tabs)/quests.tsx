@@ -9,6 +9,8 @@ import { CharacterStatusModal } from '../../components/quest/CharacterStatusModa
 import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem, RARITY_COLORS } from '../../store/useInventoryStore';
 import { useCrossPlatformAudio } from '../../hooks/useCrossPlatformAudio';
 import { AdventurerCodex } from '../../components/quest/AdventurerCodex';
+import { BossCodex } from '../../components/quest/BossCodex';
+
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { COIN_SPRITES } from '../../data/classSkills';
@@ -220,8 +222,9 @@ const S = StyleSheet.create({
   habitTitle: { color: '#FFF', fontSize: 13, fontWeight: '700' },
   habitReward: { color: '#10B981', fontSize: 11, fontWeight: '800' },
   allBossesBtn: { padding: 4 },
-  allBossesBtnTxt: { color: Colors.primary, fontSize: 11, fontWeight: '800' },
+  allBossesBtnTxt: { color: Colors.accent, fontSize: 11, fontWeight: '800' },
   bossPreviewGrid: { gap: 10 },
+
   bossMiniCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(239,68,68,0.05)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(239,68,68,0.1)' },
   bossMiniSprite: { width: 36, height: 36 },
   bossMiniName: { color: '#FFF', fontSize: 12, fontWeight: '800' },
@@ -387,8 +390,9 @@ export default function QuestsScreen() {
 
   const [activeTab, setActiveTab]       = useState<'HABITOS' | 'DAILIES' | 'GRUPO'>('HABITOS');
   const [showStatusModal, setShowStatus] = useState(false);
-  const [showBossSelect, setShowBossSelect] = useState(false);
+  const [showBossCodex, setShowBossCodex] = useState(false);
   const [inCombat, setInCombat]          = useState(false);
+
   const [inPreCombat, setInPreCombat]    = useState(false);
   const [activeBoss, setActiveBoss]      = useState<Boss | null>(null);
   const [activeFighter, setActiveFighter] = useState<Fighter | null>(null);
@@ -467,9 +471,10 @@ export default function QuestsScreen() {
     const fighter = CLASS_FIGHTERS[currentClass.id as ClassKey];
     setActiveBoss(boss);
     setActiveFighter({ ...fighter, name: currentClass.name });
-    setShowBossSelect(false);
+    setShowBossCodex(false);
     setInPreCombat(true);
   };
+
 
   const startCombat = (cards: PlayerCard[]) => {
     setSelectedCards(cards);
@@ -625,22 +630,6 @@ export default function QuestsScreen() {
           <Text style={S.volPanelLabel}>Volumen de Música</Text>
           <View style={S.volRow}>
             <TouchableOpacity
-              onPress={() => setVolume(v => Math.max(0, parseFloat((v - 0.1).toFixed(1))))}
-              style={S.volArrow}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="volume-low" size={18} color="#FFF" />
-            </TouchableOpacity>
-            <View style={S.volTrack}>
-              <View style={[S.volFill, { width: `${volume * 100}%` as any }]} />
-              {[0, 0.25, 0.5, 0.75, 1].map(mark => (
-                <View
-                  key={mark}
-                  style={[S.volMark, { left: `${mark * 100}%` as any, backgroundColor: volume >= mark ? Colors.tertiary : 'rgba(255,255,255,0.15)' }]}
-                />
-              ))}
-            </View>
-            <TouchableOpacity
               onPress={() => setVolume(v => Math.min(1, parseFloat((v + 0.1).toFixed(1))))}
               style={S.volArrow}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -664,111 +653,9 @@ export default function QuestsScreen() {
         </Animated.View>
       )}
 
-      {/* ━━ MODAL: Selección de Jefe ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <Modal visible={showBossSelect} animationType="slide" transparent>
-        <View style={S.overlay}>
-          <View style={S.modalBox}>
-            <View style={S.modalHdr}>
-              <Text style={S.modalTitle}>⚔️ Selección de Jefe</Text>
-              <TouchableOpacity
-                onPress={() => setShowBossSelect(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Cerrar"
-              >
-                <Ionicons name="close-circle" size={28} color="rgba(255,255,255,0.6)" />
-              </TouchableOpacity>
-            </View>
-            <Text style={S.modalSub}>Elige la deuda o el obstáculo que quieres confrontar hoy:</Text>
-            
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: SCREEN_H * 0.6 }}>
-              <View style={{ gap: 12, paddingBottom: 20 }}>
-                
-                <Text style={S.modalSectionTitle}>🏛️ Deudas Legendarias (Historia)</Text>
-                {DEMO_BOSSES.map((b, i) => {
-                  const bossElemData = BOSS_ELEMENTS[b.type];
-                  const elemInfo     = bossElemData ? (ELEMENT_INFO as any)[bossElemData.primary] : null;
-                  const bossHp       = Math.min(Math.floor(b.amount / 10) + b.daysOverdue * 5, 9999);
-                  const isEpic       = b.type === 'credit_card';
-                  return (
-                    <Animated.View key={`boss_${i}`} entering={FadeInUp.delay(i * 50)}>
-                      <TouchableOpacity
-                        style={[S.bossCard, isEpic && { borderColor: 'rgba(255,107,53,0.5)', backgroundColor: 'rgba(255,107,53,0.08)' }]}
-                        onPress={() => selectBoss(b)}
-                        activeOpacity={0.75}
-                      >
-                        <View style={S.bossCardTop}>
-                          {b.sprite ? (
-                            <Image 
-                              source={b.sprite} 
-                              style={{ width: 44, height: 44, marginRight: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)' }} 
-                              contentFit="contain" 
-                            />
-                          ) : (
-                            <Text style={S.bossCardIcon}>{b.icon}</Text>
-                          )}
-                          <View style={{ flex: 1 }}>
-                            <Text style={S.bossCardName}>{b.label}</Text>
-                            <Text style={S.bossCardSub}>
-                              ${b.amount.toLocaleString('es-MX')} MXN · {b.daysOverdue} días
-                            </Text>
-                          </View>
-                          <View style={[S.diffBadge, { backgroundColor: b.diffColor + '22', borderColor: b.diffColor + '55' }]}>
-                            <Text style={[S.diffTxt, { color: b.diffColor }]}>Boss</Text>
-                          </View>
-                        </View>
-                        <View style={S.bossCardBot}>
-                          <Text style={S.bossHpTxt}>❤️ {bossHp} HP · 4 fases</Text>
-                          {elemInfo && (
-                            <View style={[S.elemPill, { backgroundColor: elemInfo.color + '18', borderColor: elemInfo.color + '44' }]}>
-                              <Text style={[S.elemPillTxt, { color: elemInfo.color }]}>{elemInfo.emoji} {elemInfo.label}</Text>
-                            </View>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    </Animated.View>
-                  );
-                })}
+      {/* ━━ CÓDICE DE AMENAZAS (Lore) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <BossCodex visible={showBossCodex} onClose={() => setShowBossCodex(false)} />
 
-                <Text style={S.modalSectionTitle}>🌀 Obstáculos Comunes (Arena)</Text>
-                {QUEST_ENEMIES.map((e, i) => (
-                  <Animated.View key={`mob_${i}`} entering={FadeInUp.delay((i + 4) * 50)}>
-                    <TouchableOpacity
-                      style={S.bossCard}
-                      onPress={() => selectBoss(e)}
-                      activeOpacity={0.75}
-                    >
-                      <View style={S.bossCardTop}>
-                        {e.sprite ? (
-                          <Image 
-                            source={e.sprite} 
-                            style={{ width: 44, height: 44, marginRight: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)' }} 
-                            contentFit="contain" 
-                          />
-                        ) : (
-                          <Text style={S.bossCardIcon}>{e.emoji}</Text>
-                        )}
-                        <View style={{ flex: 1 }}>
-                          <Text style={S.bossCardName}>{e.name}</Text>
-                          <Text style={S.bossCardSub}>Enemigo de práctica · {e.xpReward} XP</Text>
-                        </View>
-                        <View style={[S.diffBadge, { backgroundColor: '#3B82F622', borderColor: '#3B82F655' }]}>
-                          <Text style={[S.diffTxt, { color: '#3B82F6' }]}>Mob</Text>
-                        </View>
-                      </View>
-                      <View style={S.bossCardBot}>
-                        <Text style={S.bossHpTxt}>❤️ {e.hp} HP · {e.maxPhases ?? 1} fase(s)</Text>
-                        <View style={[S.elemPill, { backgroundColor: '#94a3b818', borderColor: '#94a3b844' }]}>
-                          <Text style={[S.elemPillTxt, { color: '#94a3b8' }]}>🌚 Dark</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
 
       {/* ━━ MODAL: Estado del Personaje ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
@@ -859,11 +746,11 @@ export default function QuestsScreen() {
 
             <TouchableOpacity
               style={[S.combatBtn, { marginTop: 20 }]}
-              onPress={() => setShowBossSelect(true)}
+              onPress={() => setShowBossCodex(true)}
               activeOpacity={0.8}
             >
               <Image source={require('../../assets/images/items/item_sword.png')} style={{ width: 20, height: 20, marginRight: 8 }} contentFit="contain" />
-              <Text style={[S.combatBtnTitle, { fontSize: 14 }]}>Iniciar Combate</Text>
+              <Text style={[S.combatBtnTitle, { fontSize: 14 }]}>Ver Códice Lore</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -938,14 +825,14 @@ export default function QuestsScreen() {
 
               <TouchableOpacity
                 style={S.combatBtn}
-                onPress={() => setShowBossSelect(true)}
+                onPress={() => setShowBossCodex(true)}
                 activeOpacity={0.8}
               >
                 <View style={S.combatBtnGlow} />
                 <Image source={require('../../assets/images/items/item_sword.png')} style={{ width: 24, height: 24, marginRight: 12 }} contentFit="contain" />
                 <View style={{ flex: 1 }}>
-                  <Text style={S.combatBtnTitle}>¡A Combatir!</Text>
-                  <Text style={S.combatBtnSub}>Enfrenta tus deudas · Elige cartas</Text>
+                  <Text style={S.combatBtnTitle}>Códice Lore</Text>
+                  <Text style={S.combatBtnSub}>Conoce a tus deudas y enemigos</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#FFF" />
               </TouchableOpacity>
@@ -1023,8 +910,8 @@ export default function QuestsScreen() {
                   <Text style={S.sectionTitle}>⚔️ Desafíos de Jefe</Text>
                   <Text style={S.sectionSub}>Enfrenta tus deudas más grandes</Text>
                 </View>
-                <TouchableOpacity style={S.allBossesBtn} onPress={() => setShowBossSelect(true)}>
-                  <Text style={S.allBossesBtnTxt}>Ver todos</Text>
+                <TouchableOpacity style={S.allBossesBtn} onPress={() => setShowBossCodex(true)}>
+                  <Text style={S.allBossesBtnTxt}>VER CÓDICE →</Text>
                 </TouchableOpacity>
               </View>
 

@@ -6,8 +6,21 @@ import { io, Socket } from 'socket.io-client';
 import LottieView from '../../components/LottieWrapper';
 import Constants from 'expo-constants';
 import { LeagueRanking } from '../../components/league/LeagueRanking';
-import { ProgressMap, MapNode, MapMission } from '../../components/league/ProgressMap';
+import { ProgressMap, MapNode, MapMission, WorldZone } from '../../components/league/ProgressMap';
 import { LeagueJoinModal } from '../../components/league/LeagueJoinModal';
+import { ProceduralContent } from '../../utils/ProceduralContent';
+import { usePlayerStore } from '../../store/usePlayerStore';
+import { WeatherBanner } from '../../components/ui/WeatherBanner';
+import UnifiedCombatScreen from '../../components/UnifiedCombatScreen';
+
+
+import FusionPreCombat from '../../components/FusionPreCombat';
+import { BossEngine } from '../../engine/BossEngine';
+import { CLASS_FIGHTERS } from '../../data/classSkills';
+import type { ClassKey } from '../../data/classSkills';
+import { Boss, Fighter } from '../../types/combat';
+import type { PlayerCard } from '../../types/fusion';
+
 
 // ─── ESTILOS CONSOLIDADOS ────────────────────────────────────────────────────
 const S = StyleSheet.create({
@@ -599,16 +612,6 @@ const QUESTS = [
   { id: 'q_total',     name: '💰 Abono de Nómina',     points: 300 }
 ];
 
-const MAP_NODES: MapNode[] = [
-  { id: 1, label: 'Inicio',      icon: '🏠', x: 170, y: 390, state: 'done'   },
-  { id: 2, label: 'Primer pago', icon: '💳', x: 255, y: 330, state: 'done'   },
-  { id: 3, label: 'Despensa',    icon: '🛒', x: 130, y: 275, state: 'done'   },
-  { id: 4, label: 'Streaming',   icon: '📺', x: 230, y: 215, state: 'active' },
-  { id: 5, label: 'Boss',        icon: '⚔️', x: 120, y: 160, state: 'locked' },
-  { id: 6, label: 'Nómina',      icon: '💰', x: 240, y: 100, state: 'locked' },
-  { id: 7, label: 'Leyenda',     icon: '👑', x: 170, y: 44,  state: 'locked' },
-];
-
 const LEAGUE_MISSIONS: MapMission[] = [
   { id: 'm1', icon: '💳', name: 'Ingresa $100 MXN',              xp: 50,  done: true  },
   { id: 'm2', icon: '🛒', name: 'Realiza 3 compras con TokaPay', xp: 150, done: false },
@@ -616,6 +619,8 @@ const LEAGUE_MISSIONS: MapMission[] = [
   { id: 'm4', icon: '⚔️', name: 'Derrota a un boss',             xp: 500, done: false },
   { id: 'm5', icon: '💰', name: 'Recibe tu nómina en TokaPay',   xp: 300, done: false },
 ];
+
+
 
 export default function LeagueScreen() {
   const { width } = useWindowDimensions();
@@ -631,6 +636,45 @@ export default function LeagueScreen() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  // -- Combat State --
+  const { charClass } = usePlayerStore();
+  const currentClass = CLASS_FIGHTERS[charClass as ClassKey] || CLASS_FIGHTERS['warrior'];
+  const [inCombat, setInCombat]          = useState(false);
+
+  const [inPreCombat, setInPreCombat]    = useState(false);
+  const [activeBoss, setActiveBoss]      = useState<Boss | null>(null);
+  const [activeFighter, setActiveFighter] = useState<Fighter | null>(null);
+  const [selectedCards, setSelectedCards] = useState<PlayerCard[]>([]);
+  const [worldZones, setWorldZones]      = useState<WorldZone[]>([]);
+
+  useEffect(() => {
+    if (userProfile?.level) {
+      setWorldZones(ProceduralContent.generateWorldZones(userProfile.level));
+    }
+  }, [userProfile?.level]);
+
+  const handleBossFight = (node: MapNode) => {
+    if (!node.boss) return;
+    const boss = BossEngine.generateFromDebt({ 
+      id: `map_boss_${node.id}`, 
+      type: node.boss.bossType,
+      amount: node.id * 2000, 
+      daysOverdue: 10 
+    });
+
+    const fighter = CLASS_FIGHTERS[currentClass.id as ClassKey];
+    setActiveBoss(boss);
+    setActiveFighter({ ...fighter, name: currentClass.name });
+    setInPreCombat(true);
+  };
+
+  const startCombat = (cards: PlayerCard[]) => {
+    setSelectedCards(cards);
+    setInPreCombat(false);
+    setInCombat(true);
+  };
+
 
   const handleNetworkError = (err: any) => {
     console.error('Network Error:', err);
@@ -868,13 +912,15 @@ export default function LeagueScreen() {
     <>
       <Text style={S.sectionTitle}>🗺️ Mapa de Progreso</Text>
       <ProgressMap
-        nodes={MAP_NODES}
+        zones={worldZones}
         missions={LEAGUE_MISSIONS}
         xpPercent={progressPercent}
         leagueName={leagues.find(l => l.users.includes(USER_ID))?.name ?? 'BRONCE MÍTICO'}
         xpLabel={`${userProfile.xp} / ${currentThreshold} XP`}
         onMissionComplete={(id) => console.log('Mission done:', id)}
+        onBossFight={handleBossFight}
       />
+
     </>
   );
 
@@ -1005,9 +1051,13 @@ export default function LeagueScreen() {
           <View style={S.sidebar}>
             <ScrollView showsVerticalScrollIndicator={false}>
               {renderHeroBanner()}
+              <View style={{ marginBottom: 20 }}>
+                <WeatherBanner />
+              </View>
               {renderQuickMissions()}
             </ScrollView>
           </View>
+
           {/* MAIN PANE */}
           <View style={S.mainPane}>
             <ScrollView contentContainerStyle={S.scrollContent} showsVerticalScrollIndicator={false}>
@@ -1021,12 +1071,40 @@ export default function LeagueScreen() {
       ) : (
         <ScrollView style={S.container} contentContainerStyle={S.content} showsVerticalScrollIndicator={false}>
           {renderHeroBanner()}
+          <WeatherBanner />
           {renderQuickMissions()}
           {renderProgressMap()}
+
           {renderLeagues()}
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
+      {/* ━━ MOTOR DE COMBATE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {inPreCombat && activeBoss && activeFighter && (
+        <FusionPreCombat
+          boss={activeBoss}
+          onStart={startCombat}
+          onCancel={() => setInPreCombat(false)}
+        />
+      )}
+
+
+      {inCombat && activeBoss && activeFighter && (
+        <UnifiedCombatScreen
+          opponent={activeBoss}
+          player={activeFighter}
+          equippedCards={selectedCards}
+          onExit={() => setInCombat(false)}
+          onVictory={() => {
+            setInCombat(false);
+            Alert.alert('¡VICTORIA!', 'Has superado el desafío del mapa.');
+            handleSimulateTransaction(500, 'Boss de Mapa Derrotado');
+          }}
+          onDefeat={() => setInCombat(false)}
+        />
+      )}
+
     </View>
   );
 }
+

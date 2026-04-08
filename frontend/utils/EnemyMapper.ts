@@ -1,6 +1,5 @@
 // utils/EnemyMapper.ts
 // TokaVerse RPG — Transformador de enemigos simples a JRPG Bosses
-
 import { SimpleEnemy } from '../store/useCombatStore';
 import { Boss, BossSkill } from '../types/combat';
 
@@ -9,7 +8,6 @@ import { Boss, BossSkill } from '../types/combat';
  * permitiendo que sea procesado por el motor TurnManager.
  */
 export const EnemyMapper = {
-  
   simpleToBoss: (enemy: SimpleEnemy): Boss => {
     // Definimos habilidades por defecto para mobs simples
     const defaultMobSkills: BossSkill[] = [
@@ -38,7 +36,7 @@ export const EnemyMapper = {
       name: enemy.name,
       debtType: debtType,
       hp: enemy.hp,
-      maxHp: enemy.maxHp,
+      maxHp: enemy.hp, // Initial hp is max hp for mobs
       attack: enemy.attack,
       defense: enemy.defense,
       phase: 1,
