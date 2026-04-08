@@ -4,7 +4,9 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Modal, Dimensions, Animated, Easing, Platform, Alert,
 } from 'react-native';
-import Svg, { Path, Rect, Circle, G, ForeignObject, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Rect, Circle, G, ForeignObject, Line, Text as SvgText, Image as SVGImage } from 'react-native-svg';
+import { Image as RNImage } from 'react-native';
+
 
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -99,10 +101,21 @@ const TileGenerators = {
         const v = ((r * 16 + c) * 7 + 13) % 4;
         const g = ['#1a3a1a', '#163016', '#1f4a1f', '#1c3c1c'][v];
         tiles.push(<Rect key={`t-${r}-${c}`} x={c * 16} y={r * 16} width={16} height={16} fill={g} />);
-        if (Math.random() > 0.85) {
+        if (Math.random() > 0.95) {
+          tiles.push(
+            <SVGImage 
+              key={`bush-${r}-${c}`} 
+              x={c * 16} y={r * 16 - 8} 
+              width={24} height={24} 
+              preserveAspectRatio="xMidYMid slice"
+              href={require('../../assets/TinySwords/Tiny Swords (Free Pack)/Terrain/Decorations/Bushes/Bushe1.png')} 
+            />
+          );
+        } else if (Math.random() > 0.98) {
           tiles.push(<Rect key={`d-${r}-${c}`} x={c * 16 + 6} y={r * 16 + 10} width={4} height={6} fill="#2d5a2d" opacity={0.7} />);
         }
       }
+
     }
     return tiles;
   },
@@ -236,7 +249,35 @@ const NodePulse = () => {
   );
 };
 
+const SpriteSheet = ({ source, frameWidth, frameHeight, frameCount, scale = 1, duration = 800 }: any) => {
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFrame(f => (f + 1) % frameCount);
+    }, duration / frameCount);
+    return () => clearInterval(interval);
+  }, [frameCount, duration]);
+
+  const scaledWidth = Math.floor(frameWidth * scale);
+  const scaledHeight = Math.floor(frameHeight * scale);
+
+  return (
+    <View style={{ width: scaledWidth, height: scaledHeight, overflow: 'hidden' }}>
+      <RNImage 
+        source={source} 
+        style={{ 
+          width: scaledWidth * frameCount, 
+          height: scaledHeight, 
+          transform: [{ translateX: -frame * scaledWidth }] 
+        }} 
+      />
+    </View>
+  );
+};
+
 const PixelNode = ({ node, width, height, onPress }: any) => {
+
   const px = (node.x / 100) * width;
   const py = (node.y / 100) * height;
   const col = NODE_COLORS[node.type as keyof typeof NODE_COLORS] || NODE_COLORS.puzzle;
@@ -269,36 +310,59 @@ const PixelNode = ({ node, width, height, onPress }: any) => {
         style={{ width: size, height: size }}
       >
         <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          <Rect 
-            x="2" y="2" width={size - 4} height={size - 4} rx="2"
-            fill={done ? col.dark : locked ? '#2a2a3a' : col.fill}
-            stroke={locked ? '#444' : col.stroke} 
-            strokeWidth={node.type === 'boss' ? 4 : 3}
-          />
-          <Rect x="2" y="2" width={size - 4} height={Math.floor((size - 4) / 3)} rx="2" fill={locked ? '#3a3a4a' : 'rgba(255,255,255,0.18)'} />
-          <Rect x="2" y={size - 10} width={size - 4} height="8" fill={locked ? '#111' : col.dark} rx={0} opacity="0.6" />
-          <ForeignObject x={Math.floor(size / 2) - 9} y={Math.floor(size / 2) - 9} width="18" height="18">
-            <View style={{ width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
-              {(Icons[node.type as keyof typeof Icons] || Icons.puzzle)()}
-            </View>
-          </ForeignObject>
-
-          {done && (
-             <G transform={`translate(${size - 10}, 2)`}>
-                <Rect width="8" height="8" rx="1" fill="#22c55e" />
-                <SvgText 
-                  x="4" y="6.5" textAnchor="middle" fontSize="6" fill="#fff" 
-                  fontWeight="900" fontFamily={Platform.OS === 'ios' ? 'Courier' : 'monospace'}
-                >✓</SvgText>
-
-             </G>
+          {node.type !== 'boss' && (
+            <>
+              <Rect 
+                x="2" y="2" width={size - 4} height={size - 4} rx="2"
+                fill={done ? col.dark : locked ? '#2a2a3a' : col.fill}
+                stroke={locked ? '#444' : col.stroke} 
+                strokeWidth={3}
+              />
+              <Rect x="2" y="2" width={size - 4} height={Math.floor((size - 4) / 3)} rx="2" fill={locked ? '#3a3a4a' : 'rgba(255,255,255,0.18)'} />
+              <Rect x="2" y={size - 10} width={size - 4} height="8" fill={locked ? '#111' : col.dark} rx={0} opacity="0.6" />
+              <ForeignObject x={Math.floor(size / 2) - 9} y={Math.floor(size / 2) - 9} width="18" height="18">
+                <View style={{ width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+                  {(Icons[node.type as keyof typeof Icons] || Icons.puzzle)()}
+                </View>
+              </ForeignObject>
+              {done && (
+                 <G transform={`translate(${size - 10}, 2)`}>
+                    <Rect width="8" height="8" rx="1" fill="#22c55e" />
+                    <SvgText 
+                      x="4" y="6.5" textAnchor="middle" fontSize="6" fill="#fff" 
+                      fontWeight="900" fontFamily={Platform.OS === 'ios' ? 'Courier' : 'monospace'}
+                    >✓</SvgText>
+                 </G>
+              )}
+            </>
           )}
         </Svg>
+        
+        {node.type === 'boss' && !done && (
+          <View style={{ position: 'absolute', top: -16, left: -12, pointerEvents: 'none' }}>
+            <SpriteSheet 
+              source={require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Red Units/Warrior/Warrior_Idle.png')}
+              frameWidth={192} frameHeight={192} frameCount={6} scale={0.4} duration={900}
+            />
+          </View>
+        )}
+
       </TouchableOpacity>
+      
+      {active && (
+        <View style={{ position: 'absolute', top: -45, left: -20, pointerEvents: 'none', zIndex: 10 }}>
+          <SpriteSheet 
+            source={require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Blue Units/Warrior/Warrior_Idle.png')}
+            frameWidth={192} frameHeight={192} frameCount={6} scale={0.45} duration={800}
+          />
+        </View>
+      )}
+      
       {active && <NodePulse />}
     </Animated.View>
   );
 };
+
 
 const IslandView = ({ zone, onNodePress }: any) => {
   const w = ISLAND_W;

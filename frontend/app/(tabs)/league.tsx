@@ -917,7 +917,9 @@ export default function LeagueScreen() {
         xpPercent={progressPercent}
         leagueName={leagues.find(l => l.users.includes(USER_ID))?.name ?? 'BRONCE MÍTICO'}
         xpLabel={`${userProfile.xp} / ${currentThreshold} XP`}
-        onMissionComplete={(id) => console.log('Mission done:', id)}
+        onMissionComplete={(id) => {
+          handleSimulateTransaction(150, `Nodo ${id} explorado`);
+        }}
         onBossFight={handleBossFight}
       />
 
