@@ -214,7 +214,7 @@ export const LootDropModal = ({ visible, loot, onClaim, onClose }: Props) => {
 
   return (
     <Modal visible={visible} transparent animationType="none">
-      <Animated.View entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={styles.overlay}>
+      <Animated.View entering={ZoomIn.duration(300).springify().damping(15)} exiting={FadeOut.duration(200)} style={styles.overlay}>
 
         {/* Header */}
         <Animated.View entering={ZoomIn.delay(100).springify()} style={styles.header}>
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   countTxt: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '700' },
 
   // Buttons
-  claimBtnWrap: { width: '100%', paddingHorizontal: 24, gap: 10, marginTop: 8 },
+  claimBtnWrap: { width: '100%', maxWidth: 340, alignSelf: 'center', paddingHorizontal: 24, gap: 10, marginTop: 8 },
   claimBtn: {
     backgroundColor: '#fbbf24',
     borderRadius: 16, paddingVertical: 16,

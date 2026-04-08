@@ -265,7 +265,7 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
             <View style={S.overlay}>
                 <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
                 
-                <Animated.View entering={ZoomIn} style={[S.grimoireShell, { width: GR_W, height: GR_H }]}>
+                <Animated.View entering={ZoomIn.springify().damping(15)} style={[S.grimoireShell, { width: GR_W, height: GR_H }]}>
                     
                     {phase === 'cover' && (
                         <TouchableOpacity style={S.coverFull} onPress={handleCoverPress}>
@@ -304,7 +304,7 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
                                     </View>
                                 </View>
 
-                                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+                                <ScrollView showsVerticalScrollIndicator={Platform.OS === 'web'} contentContainerStyle={{ paddingBottom: 80 }}>
                                     <View style={S.sectionLblRow}>
                                         <Text style={[S.sectionLbl, { fontSize: fs(8, 12, isDesktop) }]}>{tab.toUpperCase()}</Text>
                                         <View style={S.sectionLine} />

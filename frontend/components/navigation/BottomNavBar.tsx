@@ -24,7 +24,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type TabKey = 'quests' | 'league' | 'spins' | 'wallet';
+export type TabKey = 'quests' | 'league';
 
 export interface BottomNavBarProps {
   activeTab: TabKey;
@@ -52,20 +52,6 @@ const TABS: TabItem[] = [
     label: 'LEAGUE',
     icon: (color, size) => (
       <Ionicons name="trophy-outline" size={size} color={color} />
-    ),
-  },
-  {
-    key: 'spins',
-    label: 'SPINS',
-    icon: (color, size) => (
-      <MaterialCommunityIcons name="dice-multiple-outline" size={size} color={color} />
-    ),
-  },
-  {
-    key: 'wallet',
-    label: 'WALLET',
-    icon: (color, size) => (
-      <Ionicons name="wallet-outline" size={size} color={color} />
     ),
   },
 ];

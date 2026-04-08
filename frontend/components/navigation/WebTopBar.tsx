@@ -47,20 +47,6 @@ const NAV_ITEMS: NavItem[] = [
       <Ionicons name="trophy-outline" size={size} color={color} />
     ),
   },
-  {
-    key: 'spins',
-    label: 'Spins',
-    icon: (color, size) => (
-      <MaterialCommunityIcons name="dice-multiple-outline" size={size} color={color} />
-    ),
-  },
-  {
-    key: 'wallet',
-    label: 'Wallet',
-    icon: (color, size) => (
-      <Ionicons name="wallet-outline" size={size} color={color} />
-    ),
-  },
 ];
 
 // ─── Animated NavLink ─────────────────────────────────────────────────────────

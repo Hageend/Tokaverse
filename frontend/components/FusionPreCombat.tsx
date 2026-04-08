@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform
 } from 'react-native'
 import Animated, { FadeInUp, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
@@ -82,7 +82,7 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={Platform.OS === 'web'}>
 
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
@@ -255,7 +255,7 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
                 <Ionicons name="close" size={24} color="#FFF" />
               </TouchableOpacity>
             </View>
-            <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={Platform.OS === 'web'}>
               {myCards.length === 0 ? (
                 <View style={{ padding: 40, alignItems: 'center' }}>
                   <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.2)" />

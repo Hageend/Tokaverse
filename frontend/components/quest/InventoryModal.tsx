@@ -9,7 +9,7 @@ import {
 import Animated, {
   useSharedValue, useAnimatedStyle,
   withSpring, withTiming, withRepeat, withSequence,
-  FadeIn, FadeOut, SlideInDown, SlideOutDown,
+  FadeIn, FadeOut, SlideInDown, SlideOutDown, ZoomIn, ZoomOut
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -21,9 +21,9 @@ import {
 } from '../../store/useInventoryStore';
 import { Colors } from '../../constants/Colors';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const COLS       = 5;
-const SLOT_SIZE  = Math.floor((SCREEN_W - 48 - (COLS - 1) * 6) / COLS);
+import { useWindowDimensions } from 'react-native';
+
+// SLOT_SIZE and COLS are now dynamically computed inside components
 
 // ─── Mapeo de Assets Pixel Art ────────────────────────────────────────────────
 const PIXEL_ART_ASSETS: Record<string, any> = {
@@ -98,8 +98,9 @@ interface InventorySlotProps {
   index:      number;
   isSelected: boolean;
   onPress:    () => void;
+  slotSize:   number;
 }
-function InventorySlot({ item, index, isSelected, onPress }: InventorySlotProps) {
+function InventorySlot({ item, index, isSelected, onPress, slotSize }: InventorySlotProps) {
   const scale = useSharedValue(1);
   const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -121,7 +122,7 @@ function InventorySlot({ item, index, isSelected, onPress }: InventorySlotProps)
     : null;
 
   return (
-    <Animated.View style={[{ width: SLOT_SIZE, height: SLOT_SIZE }, scaleStyle]}>
+    <Animated.View style={[{ width: slotSize, height: slotSize }, scaleStyle]}>
       <TouchableOpacity
         style={[
           slotStyles.slot,
@@ -201,8 +202,11 @@ function ItemDetail({ item, onClose, onUse }: { item: InventoryItem; onClose: ()
 
   const isEquippable = item.type === 'weapon' || item.type === 'protection';
 
+  const { width: scrW } = useWindowDimensions();
   return (
-    <Animated.View entering={FadeIn.duration(200)} style={[detStyles.panel, { borderColor: rarityColor + '55' }]}>
+    <Animated.View entering={ZoomIn.springify().damping(15)} exiting={FadeOut.duration(200)} style={detStyles.overlayRoot}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+      <View style={[detStyles.panel, { borderColor: rarityColor + '55', width: Math.min(scrW - 40, 400) }]}>
       <View style={detStyles.header}>
         {item.pixelArt ? (
           <Image 
@@ -275,12 +279,14 @@ function ItemDetail({ item, onClose, onUse }: { item: InventoryItem; onClose: ()
           </TouchableOpacity>
         )}
       </View>
+      </View>
     </Animated.View>
   );
 }
 const detStyles = StyleSheet.create({
-  panel: { backgroundColor: '#0d0d1a', borderRadius: 12, borderWidth: 1, padding: 14, marginTop: 12 },
-  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  overlayRoot: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
+  panel: { backgroundColor: '#0d0d1a', borderRadius: 16, borderWidth: 1.5, padding: 20, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 20, elevation: 12 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
   icon: { fontSize: 32, textAlign: 'center', width: 44 },
   name: { color: '#e8d5ff', fontSize: 14, fontWeight: '900' },
   rarity: { fontSize: 11, fontWeight: '800', marginTop: 2 },
@@ -296,11 +302,11 @@ const detStyles = StyleSheet.create({
   typeBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: 'rgba(255,255,255,0.03)' },
   typeText: { fontSize: 11, fontWeight: '800' },
   equipBtn: {
-    backgroundColor: Colors.primary, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 4, justifyContent: 'center',
+    backgroundColor: Colors.primary, borderRadius: 12,
+    paddingHorizontal: 20, paddingVertical: 12, justifyContent: 'center', alignItems: 'center', flex: 1,
   },
-  unequipBtn: { backgroundColor: 'rgba(239,68,68,0.2)', borderWidth: 1, borderColor: '#ef4444' },
-  equipBtnTxt: { color: '#FFF', fontSize: 10, fontWeight: '900' },
+  unequipBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#ef4444' },
+  equipBtnTxt: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
 });
 
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
@@ -333,6 +339,10 @@ export function InventoryModal({ visible, onClose, onUseItem }: InventoryModalPr
 
   const sheetStyle  = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOp.value }));
+
+  const { width: SCREEN_W } = useWindowDimensions();
+  const COLS = SCREEN_W > 1024 ? 10 : SCREEN_W > 768 ? 8 : 5;
+  const SLOT_SIZE = Math.floor((Math.min(SCREEN_W, 800) - 48 - (COLS - 1) * 6) / COLS);
 
   // Grid data: fill slots up to maxSlots
   const slots = Array.from({ length: maxSlots }, (_, i) => items[i] ?? null);
@@ -374,7 +384,7 @@ export function InventoryModal({ visible, onClose, onUseItem }: InventoryModalPr
           <Animated.View style={[styles.slotBarFill, { width: `${(items.length / maxSlots) * 100}%` as any }]} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+        <ScrollView showsVerticalScrollIndicator={Platform.OS === 'web'} contentContainerStyle={{ paddingBottom: 12 }}>
 
           {/* Grid */}
           <View style={styles.grid}>
@@ -384,22 +394,13 @@ export function InventoryModal({ visible, onClose, onUseItem }: InventoryModalPr
                 item={item ?? undefined}
                 index={idx}
                 isSelected={selectedId === item?.id}
+                slotSize={SLOT_SIZE}
                 onPress={() => setSelectedId(item?.id === selectedId ? null : item?.id ?? null)}
               />
             ))}
           </View>
 
-          {/* Item detail panel */}
-          {selectedItem && (
-            <ItemDetail 
-              item={selectedItem} 
-              onClose={() => setSelectedId(null)} 
-              onUse={(id) => {
-                onUseItem?.(id);
-                setSelectedId(null);
-              }}
-            />
-          )}
+          {/* Removed Item detail from here (moved outside ScrollView) */}
 
           {/* Slot expansion banner */}
           <View style={styles.expansionBanner}>
@@ -410,17 +411,20 @@ export function InventoryModal({ visible, onClose, onUseItem }: InventoryModalPr
             </Text>
           </View>
 
-          {/* Spin reserved section */}
-          <View style={styles.spinSection}>
-            <Text style={styles.spinTitle}>🎰 TokaSpins</Text>
-            <Text style={styles.spinSub}>Los slots de spin están reservados para futuras actualizaciones.</Text>
-            <View style={styles.spinComingSoon}>
-              <Text style={styles.spinComingSoonTxt}>🔒 Próximamente</Text>
-            </View>
-          </View>
-
         </ScrollView>
       </Animated.View>
+
+      {/* Item Detail Absolute Popup */}
+      {selectedItem && (
+        <ItemDetail 
+          item={selectedItem} 
+          onClose={() => setSelectedId(null)} 
+          onUse={(id) => {
+            onUseItem?.(id);
+            setSelectedId(null);
+          }}
+        />
+      )}
     </Modal>
   );
 }

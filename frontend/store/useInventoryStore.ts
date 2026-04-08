@@ -8,7 +8,7 @@ import { usePlayerStore } from './usePlayerStore';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
-export type ItemType   = 'card' | 'weapon' | 'protection' | 'consumable' | 'spin';
+export type ItemType   = 'card' | 'weapon' | 'protection' | 'consumable';
 export type WeaponStyle = 'sword' | 'bow' | 'staff' | 'dagger' | 'card' | 'physical';
 
 export interface ItemStats {
@@ -327,7 +327,7 @@ interface InventoryState {
   expandSlots: (amount: number) => void;
   hasItem:     (name: string) => boolean;
   getEquippedStats: () => ItemStats;
-  useItem:     (id: string) => ItemStats | null;
+  consumeItem:     (id: string) => ItemStats | null;
 }
 
 export const useInventoryStore = create<InventoryState>((set, get) => ({
@@ -456,7 +456,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     return stats;
   },
 
-  useItem(id) {
+  consumeItem(id) {
     const { items } = get();
     const item = items.find(i => i.id === id);
     if (!item || item.type !== 'consumable') return null;

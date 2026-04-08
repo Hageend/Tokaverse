@@ -1003,14 +1003,14 @@ export default function LeagueScreen() {
         <View style={S.webLayout}>
           {/* SIDEBAR */}
           <View style={S.sidebar}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={Platform.OS === 'web'}>
               {renderHeroBanner()}
               {renderQuickMissions()}
             </ScrollView>
           </View>
           {/* MAIN PANE */}
           <View style={S.mainPane}>
-            <ScrollView contentContainerStyle={S.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={S.scrollContent} showsVerticalScrollIndicator={Platform.OS === 'web'}>
               {renderProgressMap()}
               <View style={{ marginTop: 24 }}>
                 {renderLeagues()}
@@ -1019,7 +1019,7 @@ export default function LeagueScreen() {
           </View>
         </View>
       ) : (
-        <ScrollView style={S.container} contentContainerStyle={S.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={S.container} contentContainerStyle={S.content} showsVerticalScrollIndicator={Platform.OS === 'web'}>
           {renderHeroBanner()}
           {renderQuickMissions()}
           {renderProgressMap()}

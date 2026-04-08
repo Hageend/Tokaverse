@@ -11,8 +11,6 @@ import { WebBackground } from '../../components/WebBackground';
 // Map pathname → TabKey
 function pathnameToTab(pathname: string): TabKey {
   if (pathname.includes('league')) return 'league';
-  if (pathname.includes('spins')) return 'spins';
-  if (pathname.includes('wallet')) return 'wallet';
   return 'quests';
 }
 

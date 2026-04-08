@@ -2,13 +2,13 @@
 // TokaVerse RPG — Sistema de Combate Unificado JRPG (Arena + Historia)
 // Modernizado con Layout Responsivo (Enemigo | Center Arena | Jugador)
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useCrossPlatformAudio } from '../hooks/useCrossPlatformAudio';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, withRepeat,
   FadeIn, FadeInUp, FadeOut, Easing, SharedValue,
@@ -23,7 +23,7 @@ import { STATUS_INFO, AnyStatus } from '../engine/StatusEngine';
 import { Colors } from '../constants/Colors';
 import { ELEMENT_INFO } from '../types/elements';
 import type { PlayerCard } from '../types/fusion';
-import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem, RARITY_COLORS } from '../store/useInventoryStore';
+import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem } from '../store/useInventoryStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { COIN_SPRITES, ITEM_SPRITES } from '../data/classSkills';
 import { EnemyMapper } from '../utils/EnemyMapper';
@@ -72,7 +72,7 @@ const StatBar = React.memo(({ current, max, color, label, showText = true }: {
 }) => {
   const safeCur = isNaN(current) ? 0 : current;
   const safeMax = isNaN(max) || max <= 0 ? 100 : max;
-  const pct     = Math.max(0, Math.min(1, safeCur / safeMax));
+  const pct = Math.max(0, Math.min(1, safeCur / safeMax));
 
   const opacity = useSharedValue(1);
   useEffect(() => {
@@ -98,9 +98,10 @@ const StatBar = React.memo(({ current, max, color, label, showText = true }: {
     </View>
   );
 });
+StatBar.displayName = 'StatBar';
 
-const AnimatedSprite = React.memo(({ spriteUrl, onHit, sizeScale = 1, shakeAnim }: { 
-  spriteUrl: any; onHit: boolean; sizeScale?: number; shakeAnim?: SharedValue<number> 
+const AnimatedSprite = React.memo(({ spriteUrl, onHit, sizeScale = 1, shakeAnim }: {
+  spriteUrl: any; onHit: boolean; sizeScale?: number; shakeAnim?: SharedValue<number>
 }) => {
   const sc = useSharedValue(1);
   useEffect(() => {
@@ -109,19 +110,20 @@ const AnimatedSprite = React.memo(({ spriteUrl, onHit, sizeScale = 1, shakeAnim 
     }
   }, [onHit, sc]);
 
-  const animated = useAnimatedStyle(() => ({ 
+  const animated = useAnimatedStyle(() => ({
     transform: [
-      { translateX: shakeAnim?.value ?? 0 }, 
+      { translateX: shakeAnim?.value ?? 0 },
       { scale: sc.value * sizeScale }
-    ] 
+    ]
   }));
-  
+
   return (
     <Animated.View style={animated}>
-      <Image source={typeof spriteUrl === 'number' ? spriteUrl : { uri: spriteUrl }} style={{ width: 120, height: 120 }} contentFit="contain" />
+      <Image source={typeof spriteUrl === 'string' ? { uri: spriteUrl } : spriteUrl} style={{ width: 120, height: 120 }} contentFit="contain" />
     </Animated.View>
   );
 });
+AnimatedSprite.displayName = 'AnimatedSprite';
 
 const StatusChips = React.memo(({ effects }: { effects: { type: AnyStatus; duration: number }[] }) => {
   if (!effects || effects.length === 0) return null;
@@ -140,6 +142,7 @@ const StatusChips = React.memo(({ effects }: { effects: { type: AnyStatus; durat
     </View>
   );
 });
+StatusChips.displayName = 'StatusChips';
 
 const ActionBtn = React.memo(({ label, sub, color, icon, onPress, disabled, showDurability }: {
   label: string; sub?: string; color: string; icon?: string; onPress: () => void; disabled?: boolean; showDurability?: boolean
@@ -169,6 +172,7 @@ const ActionBtn = React.memo(({ label, sub, color, icon, onPress, disabled, show
     </Animated.View>
   );
 });
+ActionBtn.displayName = 'ActionBtn';
 
 // ─── LOOT MAGNET ─────────────────────────────────────────────────────────────
 
@@ -187,7 +191,7 @@ const LootMagnetEffect = React.memo(({ item, startX, startY, endX, endY, onCompl
       sc.value = withTiming(0, { duration: 800 });
       setTimeout(() => onComplete(item.id), 850);
     }, 1200);
-  }, []);
+  }, [endX, endY, item.id, onComplete, sc, startX, startY, tx, ty]);
   const anim = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: sc.value }] }));
   return (
     <Animated.View style={[lootStyles.container, anim]}>
@@ -195,11 +199,12 @@ const LootMagnetEffect = React.memo(({ item, startX, startY, endX, endY, onCompl
     </Animated.View>
   );
 });
+LootMagnetEffect.displayName = 'LootMagnetEffect';
 
 // ─── MAIN ENGINE ─────────────────────────────────────────────────────────────
 
 export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
-  const { width: widthWin, height: heightWin } = useWindowDimensions();
+  const { width: widthWin } = useWindowDimensions();
   const isDesktop = widthWin >= 1024;
 
   const bossOpponent = useMemo(() => {
@@ -230,6 +235,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const [isHeroHit, setHeroHit] = useState(false);
   const [showBag, setShowBag] = useState(false);
   const [animatingVictory, setAnimatingVictory] = useState(false);
+  const [readyForEndScreen, setReadyForEndScreen] = useState(false);
 
   const inventory = useInventoryStore(s => s.items);
   const consumables = useMemo(() => inventory.filter(i => i.type === 'consumable'), [inventory]);
@@ -239,10 +245,10 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const [lootData, setLootData] = useState<LootDropDisplay | null>(null);
 
   const combatPlayer = useCrossPlatformAudio(COMBAT_TRACKS[Math.floor(Math.random() * 6)]);
-  
+
   useEffect(() => {
     combatPlayer.setVolume(vol);
-  }, [vol]);
+  }, [combatPlayer, vol]);
 
   const [state, setState] = useState<CombatState>(() => TurnManager.initCombat(props.player, bossOpponent, props.equippedCards));
   const [busy, setBusy] = useState(false);
@@ -252,16 +258,16 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
     if (state.phase !== 'player_turn' || busyRef.current || busy) return;
     busyRef.current = true; setBusy(true);
     if (a.type === 'ATTACK' || a.type === 'SKILL' || a.type === 'FUSION') setHeroAttacking(true);
-    
+
     try {
       const next = TurnManager.executePlayerAction(state, a);
       const log = next.log[next.log.length - 1];
-      
+
       if (log?.damage && (log.actor === 'player' || log.action === 'FINANCIAL_ACTION' || a.type === 'SKILL')) {
         addDamageEvent(log.damage, 'enemy', log.isCritical ? 'critical' : (log.isWeakness ? 'weakness' : 'normal'));
         triggerShake('enemy');
       }
-      
+
       if (a.type === 'USE_ITEM') {
         useInventoryStore.getState().removeItem(a.itemId);
         setShowBag(false);
@@ -270,34 +276,37 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
       setState(next);
       setTimeout(() => setHeroAttacking(false), 600);
       if (next.phase === 'victory') {
-        flash.value = withSequence(withTiming(1, { duration: 50 }), withTiming(0, { duration: 300 }));
-        setAnimatingVictory(true);
-        const isMob = next.boss.skills.length <= 2;
-        const bossIdRaw = next.boss.id?.replace('boss_','') || 'toka_despensa';
-        const drop = BOSS_DROPS[bossIdRaw]?.guaranteed ?? selectRandomDrop(bossIdRaw);
-        const xp = isMob ? ((props.opponent as any).xpReward || 80) : 500;
-        const starCoins = isMob ? 25 : 150;
-        
-        let finalItems: (BossDropItem & { id: string })[] = [];
-        let invFull = false;
-        if (drop) {
-          const loot = { ...drop, id: `L_${Date.now()}` };
-          setLoots([loot]);
-          finalItems.push(loot);
-          const success = useInventoryStore.getState().addItem(loot as any, next.boss.name);
-          if (!success) invFull = true;
-        }
-        usePlayerStore.getState().addXp(xp);
-        usePlayerStore.getState().addStarCoins(starCoins);
-        setVictoryRewards({ xp, starCoins, items: finalItems, inventoryFull: invFull });
-        const randomDrop = selectRandomDrop(bossIdRaw);
-        setLootData({
-          guaranteed: drop ?? { icon: '🧪', name: 'Poción Menor', rarity: 'common', type: 'consumable' },
-          random: randomDrop,
-          bossName: next.boss.name,
-        });
-        setShowLootModal(true);
-        setTimeout(() => props.onVictory?.(next.boss), 5000); 
+        setTimeout(() => {
+          flash.value = withSequence(withTiming(1, { duration: 50 }), withTiming(0, { duration: 300 }));
+          setAnimatingVictory(true);
+          const isMob = next.boss.skills.length <= 2;
+          const bossIdRaw = next.boss.id?.replace('boss_', '') || 'toka_despensa';
+          const drop = BOSS_DROPS[bossIdRaw]?.guaranteed ?? selectRandomDrop(bossIdRaw);
+          const xp = isMob ? ((props.opponent as any).xpReward || 80) : 500;
+          const starCoins = isMob ? 25 : 150;
+
+          let finalItems: (BossDropItem & { id: string })[] = [];
+          let invFull = false;
+          if (drop) {
+            const loot = { ...drop, id: `L_${Date.now()}` };
+            setLoots([loot]);
+            finalItems.push(loot);
+            const success = useInventoryStore.getState().addItem(loot as any, next.boss.name);
+            if (!success) invFull = true;
+          }
+          usePlayerStore.getState().addXp(xp);
+          usePlayerStore.getState().addStarCoins(starCoins);
+          setVictoryRewards({ xp, starCoins, items: finalItems, inventoryFull: invFull });
+          const randomDrop = selectRandomDrop(bossIdRaw);
+          setLootData({
+            guaranteed: drop ?? { icon: '🧪', name: 'Poción Menor', rarity: 'common', type: 'consumable' },
+            random: randomDrop,
+            bossName: next.boss.name,
+          });
+          setShowLootModal(true);
+          setReadyForEndScreen(true);
+          setTimeout(() => props.onVictory?.(next.boss), 5000);
+        }, 1500); // 1.5s delay to witness final blow and damage 
       }
     } finally { busyRef.current = false; setBusy(false); }
   };
@@ -306,22 +315,27 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
     if (state.phase !== 'boss_turn') return;
     const t = setTimeout(() => {
       const next = TurnManager.executeBossTurn(state);
-      next.log.slice(state.log.length).forEach((e: any) => { 
+      next.log.slice(state.log.length).forEach((e: any) => {
         if (e.damage) {
-          addDamageEvent(e.damage, 'hero', 'normal'); 
+          addDamageEvent(e.damage, 'hero', 'normal');
           triggerShake('hero');
           setHeroHit(true);
           setTimeout(() => setHeroHit(false), 500);
         }
       });
       setState(next);
-      if (next.phase === 'defeat') setTimeout(() => props.onDefeat?.(), 1200);
+      if (next.phase === 'defeat') {
+        setTimeout(() => {
+          setReadyForEndScreen(true);
+          setTimeout(() => props.onDefeat?.(), 1200);
+        }, 1500);
+      }
     }, 800);
     return () => clearTimeout(t);
-  }, [state.turn, state.phase]);
+  }, [state.turn, state.phase, state, addDamageEvent, triggerShake, props]);
 
-  const isVic = state.phase === 'victory';
-  const isDef = state.phase === 'defeat';
+  const isVic = state.phase === 'victory' && readyForEndScreen;
+  const isDef = state.phase === 'defeat' && readyForEndScreen;
 
   if (animatingVictory) {
     return <TrophyDefeatAnimation onFinish={() => setAnimatingVictory(false)} />;
@@ -387,7 +401,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   return (
     <View style={styles.root}>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFF', zIndex: 99 }, flashAnim]} />
-      
+
       {/* HUD & TOP BAR */}
       <View style={styles.topBar}>
         <View style={styles.vol}><TouchableOpacity onPress={() => setVol(v => Math.max(0, v - 0.1))}><Ionicons name="volume-low" color="#FFF" size={14} /></TouchableOpacity><Text style={styles.volT}>{Math.round(vol * 100)}%</Text><TouchableOpacity onPress={() => setVol(v => Math.min(1, v + 0.1))}><Ionicons name="volume-high" color="#FFF" size={14} /></TouchableOpacity></View>
@@ -408,7 +422,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           {/* LEFT: ENEMY */}
           <View style={styles.sideCol}>
             <View style={[styles.box, { borderColor: bpc + '44', flex: 1 }]}>
-               <View style={styles.row}>
+              <View style={styles.row}>
                 <Text style={[styles.name, { color: bpc }]}>{state.boss.name}</Text>
                 {state.boss.debtAmount > 0 && <View style={[styles.badge, { backgroundColor: bpc + '15', borderColor: bpc + '55' }]}><Text style={[styles.badT, { color: bpc }]}>FASE {state.boss.phase}</Text></View>}
               </View>
@@ -425,12 +439,12 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           <View style={styles.centerCol}>
             {state.phase === 'player_turn' && state.telegraphMsg && (
               <Animated.View entering={FadeInUp} style={styles.telegraphBanner}>
-                 <Ionicons name="warning" size={14} color="#EF4444" />
-                 <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
+                <Ionicons name="warning" size={14} color="#EF4444" />
+                <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
               </Animated.View>
             )}
             <View style={[styles.log, { height: 120, marginBottom: 16 }]}>
-              <ScrollView ref={ref => ref?.scrollToEnd()} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+              <ScrollView ref={ref => ref?.scrollToEnd()} showsVerticalScrollIndicator={Platform.OS === 'web'} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
                 {state.log.slice(-5).map((m, i) => (
                   <Text key={i} style={[styles.logT, i < 4 && { opacity: 0.5, fontSize: 11 }]}>{m.message}</Text>
                 ))}
@@ -451,16 +465,16 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
                     <ActionBtn label="BOLSA" icon="briefcase" color="#A855F7" onPress={() => setShowBag(true)} />
                   </View>
                 </>
-              ) : <View style={styles.wait}><Text style={styles.waitT}>TURNO ENEMIGO...</Text></View>}
+              ) : <View style={styles.wait}><Text style={styles.waitT}>{state.phase === 'victory' ? '¡VICTORIA!' : state.phase === 'defeat' ? 'Derrota...' : 'TURNO ENEMIGO...'}</Text></View>}
             </View>
           </View>
 
           {/* RIGHT: PLAYER */}
           <View style={styles.sideCol}>
             <View style={[styles.box, { flex: 1 }]}>
-               <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                <CharacterAvatar 
-                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')} 
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <CharacterAvatar
+                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')}
                   isAttacking={isHeroAttacking}
                   isTakingDamage={isHeroHit}
                 />
@@ -468,7 +482,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={styles.pName}>{state.player.name}</Text>
                 <View style={styles.comboRow}>
-                  {[1,2,3,4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
+                  {[1, 2, 3, 4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
                 </View>
               </View>
               <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
@@ -502,7 +516,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
 
           {/* MOBILE: LOG MIDDLE */}
           <View style={[styles.log, { height: 70 }]}>
-            <ScrollView ref={ref => ref?.scrollToEnd()} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+            <ScrollView ref={ref => ref?.scrollToEnd()} showsVerticalScrollIndicator={Platform.OS === 'web'} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
               {state.log.slice(-3).map((m, i) => (
                 <Text key={i} style={[styles.logT, i < 2 && { opacity: 0.5, fontSize: 10 }]}>{m.message}</Text>
               ))}
@@ -513,8 +527,8 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           <View style={styles.box}>
             <View style={styles.row}>
               <View style={{ alignItems: 'center' }}>
-                <CharacterAvatar 
-                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')} 
+                <CharacterAvatar
+                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')}
                   isAttacking={isHeroAttacking}
                   isTakingDamage={isHeroHit}
                 />
@@ -523,7 +537,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={styles.pName}>{state.player.name}</Text>
                   <View style={styles.comboRow}>
-                    {[1,2,3,4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
+                    {[1, 2, 3, 4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
                   </View>
                 </View>
                 <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
@@ -546,7 +560,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
                   <ActionBtn label="BOLSA" icon="briefcase" color="#A855F7" onPress={() => setShowBag(true)} />
                 </View>
               </>
-            ) : <View style={styles.wait}><Text style={styles.waitT}>TURNO ENEMIGO...</Text></View>}
+            ) : <View style={styles.wait}><Text style={styles.waitT}>{state.phase === 'victory' ? '¡VICTORIA!' : state.phase === 'defeat' ? 'MURIENDO...' : 'TURNO ENEMIGO...'}</Text></View>}
           </View>
         </>
       )}
@@ -568,15 +582,15 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
               <Text style={uiStyles.bagTitle}>🧪 Objetos de Combate</Text>
               <TouchableOpacity onPress={() => setShowBag(false)}><Ionicons name="close-circle" size={24} color="#FFF" /></TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={Platform.OS === 'web'}>
               {consumables.length === 0 ? (
                 <Text style={uiStyles.emptyBag}>No tienes objetos usables.</Text>
               ) : (
                 <View style={uiStyles.bagGrid}>
                   {consumables.map(item => (
-                    <TouchableOpacity 
-                      key={item.id} 
-                      style={uiStyles.bagItem} 
+                    <TouchableOpacity
+                      key={item.id}
+                      style={uiStyles.bagItem}
                       onPress={() => handleAction({ type: 'USE_ITEM', itemId: item.id, hpHeal: item.stats?.hp, manaHeal: item.stats?.mana })}
                     >
                       <Text style={uiStyles.bagItemIcon}>{item.icon}</Text>
@@ -624,7 +638,7 @@ const styles = StyleSheet.create({
   },
   telegraphT: { color: '#ef4444', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   atbTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 2, marginTop: 4, overflow: 'hidden' },
-  atbFill:  { height: '100%', borderRadius: 2 },
+  atbFill: { height: '100%', borderRadius: 2 },
   comboRow: { flexDirection: 'row', gap: 4 },
   comboDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   comboDotActive: { backgroundColor: '#FFD700', borderColor: '#DAA520' },
@@ -663,7 +677,8 @@ const actionBtnStyles = StyleSheet.create({
 const endStyles = StyleSheet.create({
   screen: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
   resBox: {
-    width: SCREEN_W * 0.85,
+    width: '85%',
+    maxWidth: 400,
     backgroundColor: '#0f172a',
     borderRadius: 24,
     borderWidth: 2,

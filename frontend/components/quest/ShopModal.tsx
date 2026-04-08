@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, Dimensions, Alert,
+  Modal, Dimensions, Alert, Platform,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming,
@@ -167,7 +167,7 @@ export function ShopModal({ visible, onClose }: { visible: boolean; onClose: () 
             ))}
           </View>
 
-          <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={Platform.OS === 'web'}>
             {currentList && currentList.length > 0 ? currentList.map(item => (
               <ProductCard 
                 key={`${item.type}_${item.id}`} 

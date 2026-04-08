@@ -13,6 +13,17 @@ LogBox.ignoreLogs([
 ]);
 
 if (Platform.OS === 'web') {
+  if (typeof document !== 'undefined') {
+    const style = document.createElement('style');
+    style.textContent = `
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.15); border-radius: 4px; }
+      ::-webkit-scrollbar-thumb { background: rgba(123, 94, 167, 0.6); border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(153, 114, 207, 0.9); }
+    `;
+    document.head.appendChild(style);
+  }
+
   const originalWarn = console.warn;
   console.warn = (...args) => {
     if (args.length > 0 && typeof args[0] === 'string') {

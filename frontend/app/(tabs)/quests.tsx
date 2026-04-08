@@ -489,8 +489,8 @@ export default function QuestsScreen() {
   };
   
   const handleUseItem = (itemId: string) => {
-    const { useItem } = useInventoryStore.getState();
-    const stats = useItem(itemId);
+    const { consumeItem } = useInventoryStore.getState();
+    const stats = consumeItem(itemId);
     if (!stats) return;
 
     if (stats.hp) {
@@ -680,7 +680,7 @@ export default function QuestsScreen() {
             </View>
             <Text style={S.modalSub}>Elige la deuda o el obstáculo que quieres confrontar hoy:</Text>
             
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: SCREEN_H * 0.6 }}>
+            <ScrollView showsVerticalScrollIndicator={Platform.OS === 'web'} style={{ maxHeight: SCREEN_H * 0.6 }}>
               <View style={{ gap: 12, paddingBottom: 20 }}>
                 
                 <Text style={S.modalSectionTitle}>🏛️ Deudas Legendarias (Historia)</Text>

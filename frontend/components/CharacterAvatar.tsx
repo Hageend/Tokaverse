@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
-  withTiming, 
-  Easing, 
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
   withSequence,
   withSpring
 } from 'react-native-reanimated';
@@ -27,10 +27,10 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
     // Animación Idle Continua
     floatAnim.value = withRepeat(
       withTiming(6, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-      -1, 
+      -1,
       true
     );
-  }, []);
+  }, [floatAnim]);
 
   useEffect(() => {
     // Reacciona a Daño: Parpadeo Rojo y vibración
@@ -48,7 +48,7 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
         withTiming(0, { duration: 50 })
       );
     }
-  }, [isTakingDamage]);
+  }, [isTakingDamage, opacityAnim, translateX]);
 
   useEffect(() => {
     // Reacciona a Ataque: Avance rápido frontal y regreso
@@ -58,7 +58,7 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
         withSpring(1, { damping: 10 })
       );
     }
-  }, [isAttacking]);
+  }, [isAttacking, scaleAnim]);
 
   const animatedStyles = useAnimatedStyle(() => {
     return {
