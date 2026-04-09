@@ -1,13 +1,12 @@
-// components/league/DetailedIslandMap.tsx
 import React, { useEffect } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
-  ImageBackground, 
   TouchableOpacity, 
   Modal, 
-  Dimensions 
+  Dimensions, 
+  ScrollView 
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,8 +20,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Colors } from '../../constants/Colors';
 import { Island, MapNode } from '../../data/islands';
+import { createShadow, createTextShadow } from '../../utils/styleUtils';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+// Dimensiones lógicas del mapa (ajustables)
+const MAP_WIDTH = 1200;
+const MAP_HEIGHT = 800;
 
 interface Props {
   island: Island | null;
@@ -60,13 +64,16 @@ export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Pro
 
   if (!island) return null;
 
-  // Ordenar nodos que tengan pathOrder para la ruta SVG
   const pathNodes = [...island.nodes]
     .filter(n => typeof n.pathOrder === 'number')
     .sort((a, b) => (a.pathOrder ?? 0) - (b.pathOrder ?? 0));
 
-  const getCoord = (val: string | number) => 
-    typeof val === 'string' ? parseFloat(val) : val;
+  const getCoord = (val: string | number, max: number) => {
+    if (typeof val === 'string' && val.endsWith('%')) {
+      return (parseFloat(val) / 100) * max;
+    }
+    return parseFloat(val as string);
+  };
 
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent>
@@ -77,104 +84,127 @@ export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Pro
           <View style={S.header}>
             <View style={{ flex: 1 }}>
               <Text style={S.islandName}>{island.name.toUpperCase()}</Text>
-              <Text style={S.islandSub}>{island.completedMissions} / {island.totalMissions} Misiones completadas</Text>
+              <Text style={S.islandSub}>{island.completedMissions} / {island.totalMissions} Misiones </Text>
+            </View>
+            <View style={S.panningHint}>
+               <Ionicons name="move" size={12} color="rgba(255,255,255,0.4)" />
+               <Text style={S.panningHintTxt}>ARRASTRA PARA EXPLORAR</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={S.closeBtn}>
               <Ionicons name="close-circle" size={36} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
           </View>
 
-          {/* ─── ÁREA DE EXPLORACIÓN ─── */}
+          {/* ─── ÁREA DE EXPLORACIÓN (SOPORTE PANNING) ─── */}
           <View style={S.mapWrapper}>
-            <ImageBackground 
-              source={island.fullMapImage} 
-              style={S.mapBackground}
-              resizeMode="cover"
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ width: MAP_WIDTH }}
             >
-              {/* Ruta SVG */}
-              <Svg 
-                height="100%" 
-                width="100%" 
-                viewBox="0 0 100 100" 
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ height: MAP_HEIGHT }}
               >
-                {pathNodes.map((node, i) => {
-                  if (i === 0) return null;
-                  const prev = pathNodes[i - 1];
-                  return (
-                    <Line
-                      key={`line-${i}`}
-                      x1={getCoord(prev.x)}
-                      y1={getCoord(prev.y)}
-                      x2={getCoord(node.x)}
-                      y2={getCoord(node.y)}
-                      stroke="rgba(255,255,255,0.4)"
-                      strokeWidth="0.8"
-                      strokeDasharray="2,2"
-                    />
-                  );
-                })}
-              </Svg>
-
-              {/* NPCs */}
-              {island.npcs.map((npc, i) => (
-                <View 
-                  key={`npc-${i}`} 
-                  style={[S.npcWrapper, { top: npc.y as any, left: npc.x as any }]}
-                >
-                  <Image source={NPC_ASSETS[npc.npc.faction]} style={S.npcSprite} contentFit="contain" />
-                </View>
-              ))}
-
-              {/* Nodos de Progreso */}
-              {island.nodes.map((node) => {
-                const isActive = node.state === 'active';
-                const isLocked = node.state === 'locked';
-                const isDone   = node.state === 'done';
-
-                return (
-                  <View 
-                    key={node.id} 
-                    style={[S.nodeWrapper, { top: node.y as any, left: node.x as any }]}
+                <View style={{ width: MAP_WIDTH, height: MAP_HEIGHT }}>
+                  <Image 
+                    source={island.fullMapImage} 
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                  />
+                  
+                  {/* Ruta SVG */}
+                  <Svg 
+                    height="100%" 
+                    width="100%" 
+                    viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
                   >
-                    <Animated.View style={isActive ? animatedNodeStyle : null}>
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() => !isLocked && onNodePress(node)}
-                        disabled={isLocked}
-                        style={[
-                          S.nodeCircle,
-                          isActive && S.nodeActive,
-                          isLocked && S.nodeLocked,
-                          isDone && S.nodeDone
-                        ]}
+                    {pathNodes.map((node, i) => {
+                      if (i === 0) return null;
+                      const prev = pathNodes[i - 1];
+                      return (
+                        <Line
+                          key={`line-${i}`}
+                          x1={getCoord(prev.x, MAP_WIDTH)}
+                          y1={getCoord(prev.y, MAP_HEIGHT)}
+                          x2={getCoord(node.x, MAP_WIDTH)}
+                          y2={getCoord(node.y, MAP_HEIGHT)}
+                          stroke="rgba(255,255,255,0.4)"
+                          strokeWidth="2"
+                          strokeDasharray="5,5"
+                        />
+                      );
+                    })}
+                  </Svg>
+
+                  {/* NPCs */}
+                  {island.npcs.map((npc, i) => (
+                    <View 
+                      key={`npc-${i}`} 
+                      style={[S.npcWrapper, { 
+                        top: getCoord(npc.y, MAP_HEIGHT), 
+                        left: getCoord(npc.x, MAP_WIDTH) 
+                      }]}
+                    >
+                      <Image source={npc?.npc?.faction ? NPC_ASSETS[npc.npc.faction] : NPC_ASSETS.blue} style={S.npcSprite} contentFit="contain" />
+                    </View>
+                  ))}
+
+                  {/* Nodos de Progreso */}
+                  {island.nodes.map((node) => {
+                    const isActive = node.state === 'active';
+                    const isLocked = node.state === 'locked';
+                    const isDone   = node.state === 'done';
+
+                    return (
+                      <View 
+                        key={node.id} 
+                        style={[S.nodeWrapper, { 
+                          top: getCoord(node.y, MAP_HEIGHT), 
+                          left: getCoord(node.x, MAP_WIDTH) 
+                        }]}
                       >
-                        <Text style={S.nodeIcon}>{node.icon || '📍'}</Text>
-                        {isDone && (
-                          <View style={S.checkBadge}>
-                            <Ionicons name="checkmark" size={12} color="#fff" />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                      <Text style={[S.nodeLabel, isLocked && { opacity: 0.3 }]}>
-                        {node.label}
-                      </Text>
-                    </Animated.View>
-                  </View>
-                );
-              })}
-            </ImageBackground>
+                        <Animated.View style={isActive ? animatedNodeStyle : null}>
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => !isLocked && onNodePress(node)}
+                            disabled={isLocked}
+                            style={[
+                              S.nodeCircle,
+                              isActive && S.nodeActive,
+                              isLocked && S.nodeLocked,
+                              isDone && S.nodeDone
+                            ]}
+                          >
+                            <Text style={S.nodeIcon}>{node.icon || '📍'}</Text>
+                            {isDone && (
+                              <View style={S.checkBadge}>
+                                <Ionicons name="checkmark" size={12} color="#fff" />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                          <Text style={[S.nodeLabel, isLocked && { opacity: 0.3 }]}>
+                            {node.label}
+                          </Text>
+                        </Animated.View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </ScrollView>
           </View>
 
           {/* ─── BARRA DE PROGRESO INFERIOR ─── */}
           <View style={S.footer}>
              <View style={S.progressRow}>
                 <Text style={S.progressLabel}>Progreso de la Isla</Text>
-                <Text style={S.progressPercent}>{Math.round((island.completedMissions/island.totalMissions)*100)}%</Text>
+                <Text style={S.progressPercent}>{Math.round((island.completedMissions / (island.totalMissions || 1)) * 100)}%</Text>
              </View>
              <View style={S.progressTrack}>
-                <View style={[S.progressFill, { width: `${(island.completedMissions/island.totalMissions)*100}%` as any }]} />
+                <View style={[S.progressFill, { width: `${(island.completedMissions / (island.totalMissions || 1)) * 100}%` as any }]} />
              </View>
           </View>
         </View>
@@ -223,10 +253,25 @@ const S = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  panningHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 6,
+    marginRight: 10,
+  },
+  panningHintTxt: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 1,
+  },
   mapBackground: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
   },
   nodeWrapper: {
     position: 'absolute',
@@ -244,11 +289,7 @@ const S = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 12,
+    ...createShadow('#000', 0, 6, 0.6, 8, 12),
   },
   nodeActive: {
     borderColor: Colors.accent,
@@ -269,9 +310,7 @@ const S = StyleSheet.create({
     fontWeight: '900',
     color: '#fff',
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    ...createTextShadow('rgba(0,0,0,0.9)', 1, 1, 3),
     textTransform: 'uppercase',
   },
   checkBadge: {

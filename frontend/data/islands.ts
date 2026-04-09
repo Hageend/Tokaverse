@@ -60,7 +60,7 @@ export const ISLANDS_DATA: Island[] = [
     tier: 'cobre',
     miniImage: require('../assets/images/Isla del ahorro.png'),
     fullMapImage: require('../assets/images/Isla del ahorro_map.png'),
-    totalMissions: 7,
+    totalMissions: 10,
     completedMissions: 3,
     nodes: [
       { id: 1, label: 'Inicio', x: '15%', y: '80%', state: 'done', type: 'start', icon: '🏠', pathOrder: 1 },
@@ -83,7 +83,7 @@ export const ISLANDS_DATA: Island[] = [
     tier: 'plata',
     miniImage: require('../assets/images/Isla Cumbres de Inversión.png'),
     fullMapImage: require('../assets/images/Isla del ahorro_map.png'),
-    totalMissions: 5,
+    totalMissions: 15,
     completedMissions: 0,
     nodes: [
       { id: 20, label: 'Entrada Neón', x: '20%', y: '85%', state: 'active', type: 'start', icon: '🌆', pathOrder: 1 },
@@ -104,7 +104,7 @@ export const ISLANDS_DATA: Island[] = [
     tier: 'estrella',
     miniImage: require('../assets/images/Isla Cumbres de Inversión.png'),
     fullMapImage: require('../assets/images/Isla Cumbres de Inversión _map.png'),
-    totalMissions: 10,
+    totalMissions: 20,
     completedMissions: 0,
     nodes: [
       { id: 100, label: 'Base de Inversión', x: '20%', y: '80%', state: 'active', type: 'start', icon: '🏔️', pathOrder: 1 },

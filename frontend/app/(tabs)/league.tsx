@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Text, StyleSheet, ScrollView, View, TouchableOpacity, ActivityIndicator, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
+import { createShadow, createTextShadow } from '../../utils/styleUtils';
 import { Image } from 'expo-image';
 import { Colors } from '../../constants/Colors';
 import { io, Socket } from 'socket.io-client';
@@ -125,19 +126,15 @@ const S = StyleSheet.create({
 
   // ── Hero Banner ──────────────────────────────────────────────
   heroBanner: {
-    width: '100%',
-    backgroundColor: 'rgba(30, 41, 59, 1)', // Fondo slate oscuro
+    backgroundColor: 'rgba(30, 41, 59, 1)',
     borderWidth: 1.5,
     borderColor: 'rgba(77, 97, 252, 0.4)',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 28,
     position: 'relative',
     overflow: 'hidden',
-    shadowColor: '#4d61fc',
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 8,
+    ...createShadow('#4d61fc', 0, 8, 0.4, 12, 6),
   },
   heroBannerGrid: {
     flexDirection: 'row',
@@ -168,11 +165,11 @@ const S = StyleSheet.create({
     lineHeight: 18,
   },
   levelBadge: {
-    width: 64, height: 64, borderRadius: 32,
+    width: 64, height: 64, borderRadius: 16,
     backgroundColor: 'rgba(249, 115, 22, 0.15)',
     borderWidth: 2.5, borderColor: Colors.accent,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: Colors.accent, shadowOpacity: 0.3, shadowRadius: 10,
+    ...createShadow(Colors.accent, 0, 4, 0.2, 8, 4),
   },
   levelBadgeNum: {
     fontSize: 26, fontWeight: '900', color: '#FFFFFF',
@@ -193,7 +190,7 @@ const S = StyleSheet.create({
   heroCoinGlow: {
     position: 'absolute', width: 110, height: 110, borderRadius: 55,
     backgroundColor: 'rgba(249,115,22,0.15)',
-    shadowColor: '#f97316', shadowOpacity: 0.5, shadowRadius: 20,
+    ...createShadow('#f97316', 0, 4, 0.5, 20, 10),
   },
   levelBadgeInline: {
     marginTop: 8,
@@ -212,7 +209,7 @@ const S = StyleSheet.create({
     borderWidth: 1.5, borderColor: 'rgba(77,97,252,0.4)',
     borderRadius: 24, padding: 24, marginBottom: 28,
     alignItems: 'center',
-    shadowColor: '#4d61fc', shadowOpacity: 0.2, shadowRadius: 15, elevation: 8,
+    ...createShadow('#4d61fc', 0, 4, 0.2, 15, 8),
   },
   ctaTitle: {
     fontSize: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1, marginBottom: 8,
@@ -366,13 +363,9 @@ const S = StyleSheet.create({
     backgroundColor: '#1e293b',
     borderRadius: 20,
     padding: 24,
-    marginBottom: 28,
+    marginBottom: 20,
     width: '100%',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    ...createShadow('#000', 0, 10, 0.3, 20, 10),
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     overflow: 'hidden',
@@ -442,9 +435,8 @@ const S = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    marginLeft: 12,
-    shadowColor: Colors.primary, shadowOpacity: 0.4, shadowRadius: 8,
+    borderRadius: 16,
+    ...createShadow(Colors.accent, 0, 4, 0.2, 8, 4),
   },
   joinButtonLocked: {
     backgroundColor: 'transparent',
@@ -637,11 +629,7 @@ const S = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: '#1a1a2e',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    ...createShadow('#4d61fc', 0, 8, 0.4, 12, 6),
   },
   cardImg: {
     width: '100%',
@@ -661,9 +649,7 @@ const S = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: 1,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 4,
+    ...createTextShadow('rgba(0,0,0,0.8)', 1, 1, 4),
   },
   cardTier: {
     color: Colors.accent,
@@ -687,6 +673,12 @@ const S = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '900',
+  },
+  mainContent: {
+    width: '100%',
+    maxWidth: 1200,
+    alignSelf: 'center',
+    gap: 32,
   },
 });
 
@@ -1379,35 +1371,42 @@ export default function LeagueScreen() {
         }}
       />
 
-      {/* 🧩 RENDERIZADO DINÁMICO DE MINIJUEGOS 🧩 */}
-      {activePuzzle?.visible && (() => {
-          const onComplete = (success: boolean, score: number) => {
+      {/* 🧩 MOTOR DE MINIJUEGOS (Lazy Mount) 🧩 */}
+      {activePuzzle?.visible && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          {(() => {
+            const currentType = activePuzzle.type;
+            const onComplete = (success: boolean, score: number) => {
               if (success) {
-                  handleSimulateTransaction(score, `Puzzle: ${activePuzzle.type}`);
-                  Alert.alert('¡DESAFÍO SUPERADO!', `Has ganado ${score} XP para tu liga.`);
+                handleSimulateTransaction(score, `Puzzle: ${currentType}`);
+                Alert.alert('¡DESAFÍO SUPERADO!', `Has ganado ${score} XP para tu liga.`);
               }
               setActivePuzzle(null);
-          };
-          const onClose = () => setActivePuzzle(null);
+            };
+            const onClose = () => setActivePuzzle(null);
 
-          switch (activePuzzle.type) {
-              case 'debt_sorter': return <DebtSorterPuzzle visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'transaction_tagger': return <TransactionTagger visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'invoice_scanner': return <InvoiceScanner visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'change_counter': return <ChangeCounter visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'interest_calculator': return <InterestCalculator visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'savings_goal': return <SavingsGoal visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'card_match': return <CardMatchFinance visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'transaction_memory': return <TransactionMemory visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'debt_snowball': return <DebtSnowball visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'portfolio_builder': return <PortfolioBuilder visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'crisis_manager': return <CrisisManager visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'payment_timing': return <PaymentTiming visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'bubble_burst': return <BubbleBurst visible={true} onComplete={onComplete} onClose={onClose} />;
-              case 'combo_chain': return <ComboChain visible={true} onComplete={onComplete} onClose={onClose} />;
+            const puzzleProps = { visible: true, onComplete, onClose };
+
+            switch (currentType) {
+              case 'debt_sorter': return <DebtSorterPuzzle {...puzzleProps} />;
+              case 'transaction_tagger': return <TransactionTagger {...puzzleProps} />;
+              case 'invoice_scanner': return <InvoiceScanner {...puzzleProps} />;
+              case 'change_counter': return <ChangeCounter {...puzzleProps} />;
+              case 'interest_calculator': return <InterestCalculator {...puzzleProps} />;
+              case 'savings_goal': return <SavingsGoal {...puzzleProps} />;
+              case 'card_match': return <CardMatchFinance {...puzzleProps} />;
+              case 'transaction_memory': return <TransactionMemory {...puzzleProps} />;
+              case 'debt_snowball': return <DebtSnowball {...puzzleProps} />;
+              case 'portfolio_builder': return <PortfolioBuilder {...puzzleProps} />;
+              case 'crisis_manager': return <CrisisManager {...puzzleProps} />;
+              case 'payment_timing': return <PaymentTiming {...puzzleProps} />;
+              case 'bubble_burst': return <BubbleBurst {...puzzleProps} />;
+              case 'combo_chain': return <ComboChain {...puzzleProps} />;
               default: return null;
-          }
-      })()}
+            }
+          })()}
+        </View>
+      )}
 
       <LeagueJoinModal
         visible={joinedLeague !== null}
@@ -1451,12 +1450,14 @@ export default function LeagueScreen() {
         </View>
       ) : (
         <ScrollView style={S.container} contentContainerStyle={S.content} showsVerticalScrollIndicator={false}>
-          {renderHeroBanner()}
-          <WeatherBanner />
-          {renderQuickMissions()}
-          {renderIslandSelection()}
-          {renderBossPreview()}
-          {renderLeagues()}
+          <View style={S.mainContent}>
+            {renderHeroBanner()}
+            <WeatherBanner />
+            {renderQuickMissions()}
+            {renderIslandSelection()}
+            {renderBossPreview()}
+            {renderLeagues()}
+          </View>
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
