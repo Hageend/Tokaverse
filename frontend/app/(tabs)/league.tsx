@@ -602,28 +602,28 @@ const S = StyleSheet.create({
   islandGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 14,
     marginTop: 12,
   },
   islandCard: {
     width: '48%',
     backgroundColor: '#1a2234',
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   islandMiniImg: {
     width: '100%',
-    height: 100,
+    aspectRatio: 16 / 10,   // ratio fijo para que se vea completa en web y móvil
   },
   islandCardContent: {
-    padding: 10,
+    padding: 12,
   },
   islandCardName: {
     color: '#fff',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 13,
     marginBottom: 8,
   },
   islandProgressRow: {
@@ -633,9 +633,10 @@ const S = StyleSheet.create({
   },
   miniProgressBar: {
     flex: 1,
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 3,
+    overflow: 'hidden',
   },
   miniProgressFill: {
     height: '100%',
@@ -643,7 +644,7 @@ const S = StyleSheet.create({
     borderRadius: 3,
   },
   islandProgressTxt: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.55)',
     fontSize: 10,
     fontWeight: '800',
   },
@@ -1129,9 +1130,9 @@ export default function LeagueScreen() {
     </View>
   );
 
-  const renderIslandGrid = () => (
+  const renderProgressMap = () => (
     <View style={{ marginTop: 24, marginBottom: 20 }}>
-      <Text style={S.sectionTitle}>🗺️ Navegación de Mundos</Text>
+      <Text style={S.sectionTitle}>🗺️ Mapa de Progreso</Text>
       <Text style={S.sectionSub}>Selecciona una isla para ver el mapa detallado</Text>
       
       <View style={S.islandGrid}>
@@ -1159,24 +1160,6 @@ export default function LeagueScreen() {
         })}
       </View>
     </View>
-  );
-
-  const renderProgressMap = () => isMemberOfAny && (
-    <>
-      <Text style={S.sectionTitle}>🗺️ Mapa de Progreso</Text>
-      <ProgressMap
-        zones={worldZones}
-        missions={LEAGUE_MISSIONS}
-        xpPercent={progressPercent}
-        leagueName={leagues.find(l => l.users.includes(USER_ID))?.name ?? 'BRONCE MÍTICO'}
-        xpLabel={`${xp} / ${currentThreshold} XP`}
-        onMissionComplete={(id) => {
-          handleSimulateTransaction(150, `Nodo ${id} explorado`);
-        }}
-        onBossFight={handleBossFight}
-      />
-
-    </>
   );
 
   const renderLeagues = () => (
@@ -1327,6 +1310,21 @@ export default function LeagueScreen() {
         island={selectedIsland}
         visible={selectedIsland !== null}
         onClose={() => setSelectedIsland(null)}
+        onBossFight={(node) => {
+          if (!node.boss) return;
+          setSelectedIsland(null);
+          const boss = BossEngine.generateFromDebt({
+            id: `island_boss_${node.id}`,
+            type: node.boss.bossType as any,
+            amount: node.boss.hp * 10,
+            daysOverdue: 10,
+            interestRate: 15,
+          });
+          const fighter = CLASS_FIGHTERS[charClass as ClassKey] ?? CLASS_FIGHTERS.warrior;
+          setMapCombatBoss(boss);
+          setMapCombatFighter(fighter);
+          setInMapCombat(true);
+        }}
       />
       <LeagueJoinModal
         visible={joinedLeague !== null}
@@ -1372,7 +1370,6 @@ export default function LeagueScreen() {
           {renderHeroBanner()}
           <WeatherBanner />
           {renderQuickMissions()}
-          {renderIslandGrid()}
           {renderBossPreview()}
           {renderProgressMap()}
 

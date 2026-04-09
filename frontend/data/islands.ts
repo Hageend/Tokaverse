@@ -78,7 +78,30 @@ export const ISLANDS_DATA: Island[] = [
       { x: '30%', y: '20%', npc: { faction: 'purple', type: 'mage' } },
       { x: '60%', y: '65%', npc: { faction: 'blue', type: 'archer' } },
     ]
-  }
+  },
+  {
+    id: 'isla_neon',
+    name: 'Isla Neón',
+    miniImage: require('../assets/images/Isla neon.png'),
+    fullMapImage: require('../assets/images/Isla neon_map.png'),
+    totalMissions: 8,
+    completedMissions: 0,
+    npcs: [
+      { x: '40%', y: '35%', npc: { faction: 'purple', type: 'mage' } },
+      { x: '65%', y: '55%', npc: { faction: 'red', type: 'warrior' } },
+    ]
+  },
+  {
+    id: 'isla_abismo',
+    name: 'El Abismo',
+    miniImage: require('../assets/images/isla abismo_map.png'),
+    fullMapImage: require('../assets/images/Isla abismo map.png'),
+    totalMissions: 6,
+    completedMissions: 0,
+    npcs: [
+      { x: '50%', y: '50%', npc: { faction: 'purple', type: 'mage' } },
+    ]
+  },
 ];
 
 // Mapeo legacy para no romper componentes existentes mientras se migran
