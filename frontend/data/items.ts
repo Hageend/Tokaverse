@@ -1,7 +1,7 @@
 // data/items.ts
 // TokaVerse — Starter Items, Loot Tables & Item Definitions
 
-import type { Weapon, TokaCard, Coupon, Potion } from '../types/inventory';
+type Weapon = any; type TokaCard = any; type Coupon = any; type Potion = any;
 
 // ─── WEAPONS ─────────────────────────────────────────────────────────────────
 

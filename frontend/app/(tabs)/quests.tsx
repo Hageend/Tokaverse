@@ -9,11 +9,14 @@ import { CharacterStatusModal } from '../../components/quest/CharacterStatusModa
 import { useInventoryStore, BOSS_DROPS, selectRandomDrop, BossDropItem, RARITY_COLORS } from '../../store/useInventoryStore';
 import { useCrossPlatformAudio } from '../../hooks/useCrossPlatformAudio';
 import { AdventurerCodex } from '../../components/quest/AdventurerCodex';
-import { BossCodex } from '../../components/quest/BossCodex';
+import { EnemyAlmanaque } from '../../components/quest/EnemyAlmanaque';
+import { MiniIslands, MiniIslandState } from '../../components/ui/MiniIslands';
+import { CircuitLoader } from '../../components/animations/CircuitLoader';
 
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { COIN_SPRITES } from '../../data/classSkills';
+import { RPG_PETS } from '../../data/pets';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, Platform, Dimensions, useWindowDimensions
@@ -92,15 +95,16 @@ const DAILIES = [
 
 // ─── Jefes disponibles ───────────────────────────────────────────────────
 const DEMO_BOSSES = [
-  { label: 'El Carrito Vacío',        icon: '🛒', pixelIcon: 'item_chest', sprite: require('../../assets/images/bosses/boss_bill.png'), type: 'toka_despensa' as const, amount: 2500,  daysOverdue: 0,  difficulty: 'Fácil',    diffColor: '#22C55E' },
-  { label: 'El Tanque Vacío',         icon: '⛽', sprite: require('../../assets/images/bosses/rpg_boss_documents.png'), type: 'toka_fuel'     as const, amount: 1500,  daysOverdue: 5,  difficulty: 'Normal',   diffColor: '#F59E0B' },
-  { label: 'El Gasto Sin Comprobar',  icon: '📑', sprite: require('../../assets/images/bosses/rpg_boss_documents.png'), type: 'toka_connect'  as const, amount: 8000,  daysOverdue: 15, difficulty: 'Difícil',  diffColor: '#EF4444', interestRate: 10 },
-  { label: 'El Abismo de Deuda',      icon: '🕳️', pixelIcon: 'item_card', sprite: require('../../assets/images/bosses/boss_abyss.png'), type: 'abyss' as const,         amount: 15000, daysOverdue: 30, difficulty: '🌋 Épico', diffColor: '#9333ea' },
-  { label: 'Golem de Facturas',       icon: '🧱', sprite: require('../../assets/images/bosses/boss_golem.png'), type: 'golem' as const,         amount: 12000, daysOverdue: 20, difficulty: 'Difícil',  diffColor: '#475569' },
-  { label: 'Lluvia de Tickets',       icon: '🌧️', sprite: require('../../assets/images/bosses/boss_tickets.png'), type: 'tickets' as const,       amount: 3000,  daysOverdue: 10, difficulty: 'Normal',   diffColor: '#2563eb' },
-  { label: 'Monstruo de Efectivo',    icon: '💵', sprite: require('../../assets/images/bosses/boss_cash.png'), type: 'cash' as const,          amount: 25000, daysOverdue: 60, difficulty: '👹 Infernal', diffColor: '#16a34a' },
-  { label: 'Tarjeta Maldita',         icon: '🃏', pixelIcon: 'item_card', sprite: require('../../assets/images/bosses/boss_credit_card.png'), type: 'credit_card'   as const, amount: 5000,  daysOverdue: 45, difficulty: '🌋 Épico', diffColor: '#FF6B35', interestRate: 36 },
+  { label: 'El Carrito Vacío',        icon: '🛒', pixelIcon: 'item_chest', sprite: require('../../assets/images/bosses/boss_bill.png'), type: 'toka_despensa' as const, amount: 2500,  daysOverdue: 0,  difficulty: 'Fácil',    diffColor: '#22C55E', lore: 'Dicen que este espectro nació de la hambruna de mil quincenas mal administradas. Sus lamentos arrastran el eco de las despensas desoladas. Aquellos que ignoren su aullido mendicante, perecerán con el estómago vacío y las arcas en ruinas.' },
+  { label: 'El Tanque Vacío',         icon: '⛽', sprite: require('../../assets/images/bosses/rpg_boss_documents.png'), type: 'toka_fuel'     as const, amount: 1500,  daysOverdue: 5,  difficulty: 'Normal',   diffColor: '#F59E0B', lore: 'Un demonio de óxido y vapor seco. Se alimenta de la ansiedad de los viajeros que no calcularon el retorno. Su presencia paraliza las máquinas y drena la vitalidad en medio de los páramos desolados.' },
+  { label: 'El Gasto Sin Comprobar',  icon: '📑', sprite: require('../../assets/images/bosses/rpg_boss_documents.png'), type: 'toka_connect'  as const, amount: 8000,  daysOverdue: 15, difficulty: 'Difícil',  diffColor: '#EF4444', interestRate: 10, lore: 'Un leviatán de papiro y tinta corrosiva. Nace en los abismos de la burocracia financiera. Sus tentáculos enredan la mente de los incautos, multiplicando la culpa hasta consumir sus últimas reservas de energía.' },
+  { label: 'El Abismo de Deuda',      icon: '🕳️', pixelIcon: 'item_card', sprite: require('../../assets/images/bosses/boss_abyss.png'), type: 'abyss' as const,         amount: 15000, daysOverdue: 30, difficulty: '🌋 Épico', diffColor: '#9333ea', lore: 'No es una criatura, sino un vórtice. Una entidad primordial donde convergen los errores del ego y el interés compuesto. Mirar su centro es atestiguar la entropía financiera absoluta; un hueco sin fondo que se traga la voluntad misma de luchar.' },
+  { label: 'Golem de Facturas',       icon: '🧱', sprite: require('../../assets/images/bosses/boss_golem.png'), type: 'golem' as const,         amount: 12000, daysOverdue: 20, difficulty: 'Difícil',  diffColor: '#475569', lore: 'Ensamblado profanamente con los remanentes de transacciones olvidadas. Su armadura es papel, pero golpea con el peso de mil obligaciones no cumplidas. Inmune a cortes superficiales, requiere la fuerza contundente de la responsabilidad para ser derribado.' },
+  { label: 'Lluvia de Tickets',       icon: '🌧️', sprite: require('../../assets/images/bosses/boss_tickets.png'), type: 'tickets' as const,       amount: 3000,  daysOverdue: 10, difficulty: 'Normal',   diffColor: '#2563eb', lore: 'Un enjambre de entidades menores que ciega y confunde. Caen desde un cielo tormentoso, sepultando a sus víctimas en pequeños gastos "insignificantes". Juntos, su peso es el preludio silencioso del colapso.' },
+  { label: 'Monstruo de Efectivo',    icon: '💵', sprite: require('../../assets/images/bosses/boss_cash.png'), type: 'cash' as const,          amount: 25000, daysOverdue: 60, difficulty: '👹 Infernal', diffColor: '#16a34a', lore: 'La bestia corrompida de la ilusión terrenal. Brilla con la engañosa promesa de riqueza infinita, pero cada golpe suyo roba y quema tus verdaderos cimientos. Infernal y hambriento, se burla de quienes idolatran la moneda sobre la disciplina.' },
+  { label: 'Tarjeta Maldita',         icon: '🃏', pixelIcon: 'item_card', sprite: require('../../assets/images/bosses/boss_credit_card.png'), type: 'credit_card'   as const, amount: 5000,  daysOverdue: 45, difficulty: '🌋 Épico', diffColor: '#FF6B35', interestRate: 36, lore: 'Un artefacto oscuro que tomó consciencia propia. Atrae a los héroes con promesas de atajos mágicos, solo para encadenarlos en ciclos de miseria ardiente con su hechizo pasivo del 36% de dolor. Quien cae en su red, rara vez vuelve a ver la luz del día.' },
 ];
+
 
 // ─── Mapeo de Assets Pixel Art ────────────────────────────────────────────────
 const PIXEL_ART_ASSETS: Record<string, any> = {
@@ -293,6 +297,10 @@ const S = StyleSheet.create({
   partyLowWarn: { color: '#EF4444', fontSize: 10, fontWeight: '700', marginTop: 4 },
   healBtn:      { backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   healBtnTxt:   { color: '#FFF', fontWeight: '900', fontSize: 11 },
+  // Pet Styles
+  petContainer: { alignItems: 'center', justifyContent: 'center', marginLeft: -5, zIndex: 10 },
+  petBuffBadge: { backgroundColor: 'rgba(234,179,8,0.15)', borderWidth: 1, borderColor: '#EAB308', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: -4 },
+  petBuffTxt:   { color: '#FDE047', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
 });
 
 const USER_ID = 'user_123';
@@ -371,7 +379,8 @@ export default function QuestsScreen() {
     starCoins, 
     unlockedClasses, 
     charClass: activeClassId,
-    setCharClass: setPlayerCharClass 
+    setCharClass: setPlayerCharClass,
+    equippedPet
   } = usePlayerStore();
 
   const currentClass = JRPG_CLASSES.find(c => c.id === activeClassId) || JRPG_CLASSES[0];
@@ -380,6 +389,10 @@ export default function QuestsScreen() {
   const xp          = userProfile?.xp    ?? 0;
   const xpMax       = XP_THRESHOLDS[level]     ?? 100000;
   const prevThresh  = XP_THRESHOLDS[level - 1] ?? 0;
+
+  const activePetData = equippedPet ? RPG_PETS.find(p => p.id === equippedPet) : null;
+  const isPetEvolved = activePetData && level >= activePetData.stage2_evolved.levelRequired;
+  const currentPetStage = isPetEvolved ? activePetData?.stage2_evolved : activePetData?.stage1;
 
   const [hp,       setHp]     = useState(100);
   const [hpMax]               = useState(100);
@@ -390,7 +403,7 @@ export default function QuestsScreen() {
 
   const [activeTab, setActiveTab]       = useState<'HABITOS' | 'DAILIES' | 'GRUPO'>('HABITOS');
   const [showStatusModal, setShowStatus] = useState(false);
-  const [showBossCodex, setShowBossCodex] = useState(false);
+  const [showAlmanaque, setShowAlmanaque] = useState(false);
   const [inCombat, setInCombat]          = useState(false);
 
   const [inPreCombat, setInPreCombat]    = useState(false);
@@ -404,6 +417,8 @@ export default function QuestsScreen() {
   const [isAttacking,    setAttacking] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
   const [showShop, setShowShop]           = useState(false);
+  const [showEvolutionAnim, setShowEvolutionAnim] = useState(false);
+  const [hasShownEvolution, setHasShownEvolution] = useState<{ [petId: string]: boolean }>({});
 
   const { addItem: addInventoryItem, items: inventoryItems, maxSlots } = useInventoryStore();
 
@@ -471,7 +486,7 @@ export default function QuestsScreen() {
     const fighter = CLASS_FIGHTERS[currentClass.id as ClassKey];
     setActiveBoss(boss);
     setActiveFighter({ ...fighter, name: currentClass.name });
-    setShowBossCodex(false);
+    setShowAlmanaque(false);
     setInPreCombat(true);
   };
 
@@ -518,6 +533,28 @@ export default function QuestsScreen() {
       ambientSound.play();
     }
   }, [inCombat]);
+
+  // ── Lógica Evolución Mascotas ───────────────────────────────────────────
+  useEffect(() => {
+    if (activePetData && isPetEvolved && equippedPet && !hasShownEvolution[equippedPet]) {
+      // Retrasar showing para que no salte de golpe al cambiar de tab
+      const tmr = setTimeout(() => {
+        setShowEvolutionAnim(true);
+        setHasShownEvolution(prev => ({ ...prev, [equippedPet]: true }));
+        
+        setTimeout(() => {
+          setShowEvolutionAnim(false);
+        }, 3500); // Duración de la animación
+      }, 1000);
+      return () => clearTimeout(tmr);
+    }
+  }, [activePetData, isPetEvolved, equippedPet, hasShownEvolution]);
+
+  const mockIslands: MiniIslandState[] = [
+    { id: '1', name: 'Valle de Compras', questsCompleted: 3, totalQuests: 5, unlocked: true, emoji: '🛒' },
+    { id: '2', name: 'Cumbre Ahorro', questsCompleted: 0, totalQuests: 10, unlocked: true, emoji: '⛰️' },
+    { id: '3', name: 'Isla Dorada', questsCompleted: 0, totalQuests: 20, unlocked: false, emoji: '💎' },
+  ];
 
   // ─── Cálculos del elemento del personaje ──────────────────────────────
   const classElem     = (CLASS_ELEMENTS as any)[currentClass.id];
@@ -653,8 +690,12 @@ export default function QuestsScreen() {
         </Animated.View>
       )}
 
-      {/* ━━ CÓDICE DE AMENAZAS (Lore) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <BossCodex visible={showBossCodex} onClose={() => setShowBossCodex(false)} />
+      {/* ━━ ALMANAQUE DE AMENAZAS (Bestiario) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <EnemyAlmanaque 
+        visible={showAlmanaque} 
+        onClose={() => setShowAlmanaque(false)} 
+        onSelectBoss={(b) => selectBoss(b)} 
+      />
 
 
 
@@ -746,11 +787,11 @@ export default function QuestsScreen() {
 
             <TouchableOpacity
               style={[S.combatBtn, { marginTop: 20 }]}
-              onPress={() => setShowBossCodex(true)}
+              onPress={() => setShowAlmanaque(true)}
               activeOpacity={0.8}
             >
               <Image source={require('../../assets/images/items/item_sword.png')} style={{ width: 20, height: 20, marginRight: 8 }} contentFit="contain" />
-              <Text style={[S.combatBtnTitle, { fontSize: 14 }]}>Ver Códice Lore</Text>
+              <Text style={[S.combatBtnTitle, { fontSize: 14 }]}>Ver Almanaque</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -803,6 +844,30 @@ export default function QuestsScreen() {
                     isTakingDamage={isTakingDamage}
                     isAttacking={isAttacking}
                   />
+
+                  {currentPetStage && (
+                    <TouchableOpacity 
+                      style={S.petContainer} 
+                      onPress={() => {
+                        // Reproduce la animación manualmente si ya está evolucionado
+                        if (isPetEvolved) {
+                          setShowEvolutionAnim(true);
+                          setTimeout(() => setShowEvolutionAnim(false), 3500);
+                        }
+                      }}
+                      activeOpacity={isPetEvolved ? 0.7 : 1}
+                    >
+                      <Image 
+                        source={currentPetStage.sprite} 
+                        style={{ width: 45, height: 45 }} 
+                        contentFit="contain" 
+                      />
+                      <View style={S.petBuffBadge}>
+                        <Text style={S.petBuffTxt}>{currentPetStage.buffText}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
                   <View style={S.barsCol}>
                     {[
                       { label: 'HP', cur: hp,   max: hpMax,   color: '#EF4444', style: hpBarStyle },
@@ -825,19 +890,22 @@ export default function QuestsScreen() {
 
               <TouchableOpacity
                 style={S.combatBtn}
-                onPress={() => setShowBossCodex(true)}
+                onPress={() => setShowAlmanaque(true)}
                 activeOpacity={0.8}
               >
                 <View style={S.combatBtnGlow} />
                 <Image source={require('../../assets/images/items/item_sword.png')} style={{ width: 24, height: 24, marginRight: 12 }} contentFit="contain" />
                 <View style={{ flex: 1 }}>
-                  <Text style={S.combatBtnTitle}>Códice Lore</Text>
+                  <Text style={S.combatBtnTitle}>Almanaque</Text>
                   <Text style={S.combatBtnSub}>Conoce a tus deudas y enemigos</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#FFF" />
               </TouchableOpacity>
             </>
           )}
+
+          {/* ── ISLAS INTERACTIVAS ── */}
+          <MiniIslands islands={mockIslands} />
 
           <View style={[isDesktop && S.contentGrid]}>
             {/* ── SECCIÓN: Hábitos ────────────────────────────────────── */}
@@ -910,8 +978,8 @@ export default function QuestsScreen() {
                   <Text style={S.sectionTitle}>⚔️ Desafíos de Jefe</Text>
                   <Text style={S.sectionSub}>Enfrenta tus deudas más grandes</Text>
                 </View>
-                <TouchableOpacity style={S.allBossesBtn} onPress={() => setShowBossCodex(true)}>
-                  <Text style={S.allBossesBtnTxt}>VER CÓDICE →</Text>
+                <TouchableOpacity style={S.allBossesBtn} onPress={() => setShowAlmanaque(true)}>
+                  <Text style={S.allBossesBtnTxt}>ALMANAQUE →</Text>
                 </TouchableOpacity>
               </View>
 
@@ -939,6 +1007,18 @@ export default function QuestsScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {/* MODAL DE EVOLUCIÓN */}
+      {showEvolutionAnim && activePetData && (
+        <Modal visible transparent animationType="fade">
+          <View style={[S.overlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
+            <CircuitLoader 
+              spriteUrl={currentPetStage?.sprite} // Usa el sprite del estado actual (adulto/bebé) en el centro 
+              evolutionText={`¡${activePetData.name} conectando sistemas!`}
+            />
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }

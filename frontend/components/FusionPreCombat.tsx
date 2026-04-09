@@ -9,6 +9,7 @@ import Animated, { FadeInUp, FadeInDown, useSharedValue, useAnimatedStyle, withR
 import { Ionicons } from '@expo/vector-icons'
 import { Colors } from '../constants/Colors'
 import { useInventoryStore, InventoryItem } from '../store/useInventoryStore'
+import { usePlayerStore } from '../store/usePlayerStore'
 import { FusionEngine } from '../engine/FusionEngine'
 import { ELEMENT_INFO, ELEMENT_CHART, Element } from '../types/elements'
 import type { PlayerCard, FusionResult } from '../types/fusion'
@@ -31,6 +32,8 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
   const [equippedCards, setEquippedCards] = useState<(PlayerCard | null)[]>([null, null, null])
   const [detectedFusions, setDetectedFusions] = useState<FusionResult[]>([])
   const [showCardPicker, setShowCardPicker] = useState<number | null>(null)
+
+  const unlockRecipe = usePlayerStore(s => s.unlockRecipe)
 
   // Obtener cartas reales del inventario
   const inventoryItems = useInventoryStore(s => s.items)
@@ -231,7 +234,16 @@ export default function FusionPreCombat({ boss, onStart, onCancel }: Props) {
 
         {/* Botón iniciar */}
         <Animated.View entering={FadeInUp.delay(400).duration(400)} style={{ marginTop: 24 }}>
-          <TouchableOpacity style={styles.startBtn} onPress={() => onStart(equippedCards.filter(Boolean) as PlayerCard[])}>
+          <TouchableOpacity style={styles.startBtn} onPress={() => {
+            // Desbloquear posibles recetas misteriosas equipadas
+            detectedFusions.forEach(f => {
+              if (f.name.includes('???')) {
+                unlockRecipe(f.id);
+                // Aquí en una app real se podría disparar un Toast de "¡Receta descubierta!"
+              }
+            });
+            onStart(equippedCards.filter(Boolean) as PlayerCard[]);
+          }}>
             <Text style={styles.startBtnIcon}>⚔️</Text>
             <View>
               <Text style={styles.startBtnTxt}>¡Iniciar Combate!</Text>

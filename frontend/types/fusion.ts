@@ -18,6 +18,8 @@ export interface PassiveBonus {
   element?: Element      // si es element_boost, qué elemento potencia
 }
 
+export type FusionTier = 'duo' | 'trinity' | 'hidden';
+
 export interface FusionResult {
   id:          string
   name:        string
@@ -26,7 +28,9 @@ export interface FusionResult {
   element:     Element
   duration:    number    // turnos que dura el efecto
   statBoost?:  number    // multiplicador de stats (ej: 1.25 = +25%)
-  specialEffect?: 'auto_block' | 'speed_boost' | 'reveal_boss' | 'all_elements' | 'no_mana_cost'
+  specialEffect?: 'auto_block' | 'speed_boost' | 'reveal_boss' | 'all_elements' | 'no_mana_cost' | 'regen_hp'
+  tier?:       FusionTier
+  isHidden?:   boolean   // Si es una receta oculta (secreta)
 }
 
 export interface FusionSlot {

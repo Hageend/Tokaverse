@@ -1,6 +1,6 @@
 // TokaVerse — Generación procedural de contenido (eventos, misiones, enemigos)
 import type { Element } from '../types/elements'
-import type { MapNode, NodeType, WorldZone } from '../components/league/ProgressMap'
+import type { MapNode, NodeType, WorldZone } from '../data/islands'
 import { LORE_ENTRIES, NPCS } from '../data/lore'
 
 export interface ProceduralEvent {

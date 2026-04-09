@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Text, StyleSheet, ScrollView, View, TouchableOpacity, ActivityIndicator, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Colors } from '../../constants/Colors';
@@ -6,14 +6,17 @@ import { io, Socket } from 'socket.io-client';
 import LottieView from '../../components/LottieWrapper';
 import Constants from 'expo-constants';
 import { LeagueRanking } from '../../components/league/LeagueRanking';
-import { ProgressMap, MapNode, MapMission, WorldZone } from '../../components/league/ProgressMap';
+import { ProgressMap, MapMission } from '../../components/league/ProgressMap';
+import { MapNode, WorldZone, ISLANDS_DB, ISLANDS_DATA, Island } from '../../data/islands';
 import { LeagueJoinModal } from '../../components/league/LeagueJoinModal';
+import { DetailedIslandMap } from '../../components/league/DetailedIslandMap';
 import { ProceduralContent } from '../../utils/ProceduralContent';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { WeatherBanner } from '../../components/ui/WeatherBanner';
+import { EnemyAlmanaque } from '../../components/quest/EnemyAlmanaque';
+import { AdventurerCodex } from '../../components/quest/AdventurerCodex';
+import { Ionicons } from '@expo/vector-icons';
 import UnifiedCombatScreen from '../../components/UnifiedCombatScreen';
-
-
 import FusionPreCombat from '../../components/FusionPreCombat';
 import { BossEngine } from '../../engine/BossEngine';
 import { CLASS_FIGHTERS } from '../../data/classSkills';
@@ -30,6 +33,56 @@ const S = StyleSheet.create({
     paddingTop: 48,
     paddingBottom: 60,
     flexGrow: 1,
+  },
+  
+  // -- Boss Preview Section --
+  bossPreviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8
+  },
+  bossPreviewGridDesktop: {
+    gap: 16,
+  },
+  gridSectionFull: { width: '100%' },
+  sectionSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 2 },
+  bossMiniCard: {
+    flexDirection: 'row',
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    flex: 1,
+    minWidth: '48%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)'
+  },
+  bossMiniCardDesktop: {
+    padding: 12,
+  },
+  bossMiniSprite: {
+    width: 32, height: 32, marginRight: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 4
+  },
+  bossMiniName: {
+    color: '#fff', fontSize: 12, fontWeight: 'bold'
+  },
+  bossMiniAmt: {
+    color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '800'
+  },
+  miniBadge: {
+    paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, borderWidth: 1
+  },
+  allBossesBtn: {
+    backgroundColor: 'rgba(249,115,22,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.4)',
+  },
+  allBossesBtnTxt: {
+    color: '#F97316', fontSize: 11, fontWeight: '800', textTransform: 'uppercase'
   },
   // -- Desktop Layout --
   webLayout: {
@@ -544,7 +597,56 @@ const S = StyleSheet.create({
     fontSize: 14,
     marginBottom: 6,
     fontWeight: '600',
-  }
+  },
+  // -- Island Navigation Grid --
+  islandGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+  },
+  islandCard: {
+    width: '48%',
+    backgroundColor: '#1a2234',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  islandMiniImg: {
+    width: '100%',
+    height: 100,
+  },
+  islandCardContent: {
+    padding: 10,
+  },
+  islandCardName: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  islandProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  miniProgressBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 3,
+  },
+  miniProgressFill: {
+    height: '100%',
+    backgroundColor: Colors.accent,
+    borderRadius: 3,
+  },
+  islandProgressTxt: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    fontWeight: '800',
+  },
 });
 
 interface UserProfile {
@@ -635,10 +737,13 @@ export default function LeagueScreen() {
   const confettiRef = useRef<any>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [joinedLeague, setJoinedLeague] = useState<League | null>(null);
+  const [showAlmanaque, setShowAlmanaque] = useState(false);
+  const [showCodex, setShowCodex] = useState(false); // TIENDA Y CÓDICE
   const socketRef = useRef<Socket | null>(null);
+  const [selectedIsland, setSelectedIsland] = useState<Island | null>(null);
 
   // -- Combat State --
-  const { charClass } = usePlayerStore();
+  const { charClass, level, xp } = usePlayerStore(); // FUENTE DE VERDAD
   const currentClass = CLASS_FIGHTERS[charClass as ClassKey] || CLASS_FIGHTERS['warrior'];
   const [inCombat, setInCombat]          = useState(false);
 
@@ -648,9 +753,30 @@ export default function LeagueScreen() {
   const [selectedCards, setSelectedCards] = useState<PlayerCard[]>([]);
   const [worldZones, setWorldZones]      = useState<WorldZone[]>([]);
 
+  const DEMO_BOSSES = useMemo(() => {
+    const extracted: any[] = [];
+    ISLANDS_DB.forEach(zone => {
+        zone.nodes.forEach(node => {
+            if (node.type === 'boss' && node.boss) {
+                extracted.push({
+                    ...node.boss,
+                    id: node.id,
+                    type: node.bossType || (node.boss as any).bossType,
+                    label: node.boss.name,
+                    amount: node.id * 2000, 
+                    daysOverdue: Math.floor(Math.random() * 30),
+                    difficulty: 'Rank ' + node.id,
+                    diffColor: '#F97316'
+                });
+            }
+        });
+    });
+    return extracted;
+  }, []);
+
   useEffect(() => {
     if (userProfile?.level) {
-      setWorldZones(ProceduralContent.generateWorldZones(userProfile.level));
+      setWorldZones(ISLANDS_DB); // Uso de la BD estática maestra de Master Plan
     }
   }, [userProfile?.level]);
 
@@ -658,12 +784,12 @@ export default function LeagueScreen() {
     if (!node.boss) return;
     const boss = BossEngine.generateFromDebt({ 
       id: `map_boss_${node.id}`, 
-      type: node.boss.bossType,
+      type: node.boss.bossType as any,
       amount: node.id * 2000, 
       daysOverdue: 10 
     });
 
-    const fighter = CLASS_FIGHTERS[currentClass.id as ClassKey];
+    const fighter = currentClass; // Ya lo tenemos calculado arriba del componente
     setActiveBoss(boss);
     setActiveFighter({ ...fighter, name: currentClass.name });
     setInPreCombat(true);
@@ -687,19 +813,46 @@ export default function LeagueScreen() {
   const fetchInitialData = async () => {
     try {
       // 1. Cargar Perfil de Usuario
-      const userRes = await fetch(`${API_URL}/users/${USER_ID}/profile`);
-      if (userRes.ok) {
+      const userRes = await fetch(`${API_URL}/users/${USER_ID}/profile`).catch(() => null);
+      if (userRes && userRes.ok) {
          setUserProfile(await userRes.json());
+      } else {
+         setUserProfile({ id: USER_ID, xp: 1250, level: 1 }); // Fallback Local
       }
       
-      // 2. Cargar Ligas Guardadas
-      const leagueRes = await fetch(`${API_URL}/leagues`);
-      if (!leagueRes.ok) throw new Error('Servidor de Ligas falló');
-      setLeagues(await leagueRes.json());
+      // 2. Cargar Ligas Guardadas con AbortController para Timeout
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 1500); // 1.5s timeout
+      const leagueRes = await fetch(`${API_URL}/leagues`, { signal: controller.signal }).catch(() => null);
+      clearTimeout(id);
+
+      if (leagueRes && leagueRes.ok) {
+        setLeagues(await leagueRes.json());
+      } else {
+        // Fallback de red: Ligas Mock (Entrenamiento Cobre)
+        setLeagues([{
+          id: 'l_mock_1',
+          name: 'Liga Toka Cobre (Mock)',
+          description: 'Servidor no detectado. Modo de entrenamiento local activo.',
+          tier: 'cobre',
+          level: 1, minLevel: 1,
+          users: [USER_ID],
+          ranking: [{ userId: USER_ID, leagueId: 'l_mock_1', points: 1500, position: 1, rewards: [] }]
+        }]);
+      }
 
     } catch (err) {
-      handleNetworkError(err);
-      setLeagues([]);
+      console.warn('Network Error Fallback:', err);
+      if (!userProfile) setUserProfile({ id: USER_ID, xp, level });
+      setLeagues([{
+        id: 'l_mock_1',
+        name: 'Liga Toka Cobre (Mock)',
+        description: 'Servidor no detectado. Modo de entrenamiento local activo.',
+        tier: 'cobre',
+        level: 1, minLevel: 1,
+        users: [USER_ID],
+        ranking: [{ userId: USER_ID, leagueId: 'l_mock_1', points: 1500, position: 1, rewards: [] }]
+      }]);
     } finally {
       setLoading(false);
     }
@@ -824,7 +977,7 @@ export default function LeagueScreen() {
     }
   };
 
-  if (loading || !userProfile) {
+  if (loading) {
     return (
       <View style={[S.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator color={Colors.primary} size="large" />
@@ -832,12 +985,16 @@ export default function LeagueScreen() {
     );
   }
 
+  // Fallback si por alguna razón loading terminó pero no hay profile
+  const profile = userProfile || { id: USER_ID, xp: 0, level: 0 };
+
   // XP Progress Calculation logic for UI 
-  // Nivel 1: Ronin (0 -> 2.5k), Nivel 2: Genin (2.5k -> 10k), Nivel 3: Chunin (10k -> 35k), Nivel 4: Jonin (MAX)
-  const XP_THRESHOLDS = [0, 2500, 10000, 35000, 100000];
-  const currentThreshold = XP_THRESHOLDS[userProfile.level] || 35000;
-  const prevThreshold = XP_THRESHOLDS[userProfile.level - 1] || 0;
-  const progressPercent = userProfile.level >= 4 ? 100 : Math.min(100, Math.floor(((userProfile.xp - prevThreshold) / (currentThreshold - prevThreshold)) * 100));
+  // Formula Base desde usePlayerStore: base=100, delta=1.15^N
+  const XP_BASE = 100;
+  const MAX_LEVEL = 250;
+  const currentThreshold = Math.floor(XP_BASE * Math.pow(1.15, level - 1));
+  const prevThreshold = level > 1 ? Math.floor(XP_BASE * Math.pow(1.15, level - 2)) : 0;
+  const progressPercent = level >= MAX_LEVEL ? 100 : Math.min(100, Math.max(0, Math.floor(((xp - prevThreshold) / (currentThreshold - prevThreshold)) * 100)));
   const isMemberOfAny = leagues.some(l => l.users.includes(USER_ID));
 
   const renderHeroBanner = () => (
@@ -859,19 +1016,19 @@ export default function LeagueScreen() {
             </Text>
             <Text style={S.heroBannerSub}>Supera misiones · Sube de nivel</Text>
             <View style={S.levelBadgeInline}>
-              <Text style={S.levelBadgeInlineTxt}>NIV. {userProfile.level}</Text>
+              <Text style={S.levelBadgeInlineTxt}>NIV. {level}</Text>
             </View>
           </View>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-          <Text style={S.xpLabel}>XP {userProfile.xp.toLocaleString()}</Text>
+          <Text style={S.xpLabel}>XP {xp.toLocaleString()}</Text>
           <Text style={S.xpLabel}>{currentThreshold.toLocaleString()}</Text>
         </View>
         <View style={S.progressBarBg}>
           <Animated.View style={[S.progressBarFill, { width: `${progressPercent}%` as any }]} />
         </View>
         <Text style={S.xpThresholdCaption}>
-          Faltan {Math.max(0, currentThreshold - userProfile.xp).toLocaleString()} XP para el próximo rango
+          Faltan {Math.max(0, currentThreshold - xp).toLocaleString()} XP para el próximo rango
         </Text>
       </View>
     ) : (
@@ -904,8 +1061,104 @@ export default function LeagueScreen() {
           <Text style={S.txnChipEmoji}>📋</Text>
           <Text style={[S.txnChipTxt, isDesktop && S.txnChipTxtDesktop, { color: '#C084FC' }]}>Validación{'\n'}+200 XP</Text>
         </TouchableOpacity>
+        <TouchableOpacity 
+          style={[S.txnChip, isDesktop && S.txnChipDesktop, { borderColor: Colors.accent + '33', backgroundColor: Colors.accent + '11' }]} 
+          onPress={() => setShowAlmanaque(true)}
+        >
+          <Ionicons name="book" size={24} color={Colors.accent} />
+          <Text style={[S.txnChipTxt, isDesktop && S.txnChipTxtDesktop, { color: Colors.accent }]}>Almanaque{'\n'}Bestiario</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[S.txnChip, isDesktop && S.txnChipDesktop, { borderColor: '#FFD70044', backgroundColor: '#FFD70011' }]} 
+          onPress={() => setShowCodex(true)}
+        >
+          <Ionicons name="diamond" size={24} color="#FFD700" />
+          <Text style={[S.txnChipTxt, isDesktop && S.txnChipTxtDesktop, { color: '#FFD700' }]}>Mercader{'\n'}Códice</Text>
+        </TouchableOpacity>
       </View>
     </>
+  );
+
+
+  const renderBossPreview = () => isMemberOfAny && (
+    <View style={[{ marginTop: 24, marginBottom: 12 }, isDesktop && S.gridSectionFull]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <View>
+          <Text style={S.sectionTitle}>📕 Bestiario de Amenazas</Text>
+          <Text style={S.sectionSub}>Conoce debilidades y drops</Text>
+        </View>
+        <TouchableOpacity style={S.allBossesBtn} onPress={() => setShowAlmanaque(true)}>
+          <Text style={S.allBossesBtnTxt}>Ver todos</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[S.bossPreviewGrid, isDesktop && S.bossPreviewGridDesktop]}>
+        {DEMO_BOSSES.slice(0, isDesktop ? 4 : 2).map((b: any, i: number) => (
+          <TouchableOpacity 
+            key={i} 
+            style={[S.bossMiniCard, isDesktop && S.bossMiniCardDesktop]} 
+            onPress={() => {
+              const boss = BossEngine.generateFromDebt({ 
+                  id: `map_boss_${b.id}`, 
+                  type: b.type as any,
+                  amount: b.amount, 
+                  daysOverdue: b.daysOverdue 
+              });
+              setActiveBoss(boss);
+              setActiveFighter({ ...currentClass, name: currentClass.name });
+              setInPreCombat(true);
+            }}
+          >
+            {b.sprite ? (
+              <Image source={b.sprite} style={S.bossMiniSprite} contentFit="contain" />
+            ) : (
+              <Text style={{ fontSize: 24, marginRight: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 4 }}>{b.icon || '👾'}</Text>
+            )}
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={S.bossMiniName} numberOfLines={1}>{b.label}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={[S.miniBadge, { backgroundColor: b.diffColor + '22', borderColor: b.diffColor + '55', borderWidth: 1 }]}>
+                  <Text style={{ color: b.diffColor, fontSize: 8, fontWeight: '700' }}>{b.difficulty}</Text>
+                </View>
+                <Text style={S.bossMiniAmt}>${b.amount.toLocaleString()}</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderIslandGrid = () => (
+    <View style={{ marginTop: 24, marginBottom: 20 }}>
+      <Text style={S.sectionTitle}>🗺️ Navegación de Mundos</Text>
+      <Text style={S.sectionSub}>Selecciona una isla para ver el mapa detallado</Text>
+      
+      <View style={S.islandGrid}>
+        {ISLANDS_DATA.map((island) => {
+          const progress = (island.completedMissions / island.totalMissions) * 100;
+          return (
+            <TouchableOpacity 
+              key={island.id} 
+              style={S.islandCard}
+              onPress={() => setSelectedIsland(island)}
+              activeOpacity={0.8}
+            >
+              <Image source={island.miniImage} style={S.islandMiniImg} contentFit="cover" />
+              <View style={S.islandCardContent}>
+                <Text style={S.islandCardName}>{island.name}</Text>
+                <View style={S.islandProgressRow}>
+                  <View style={S.miniProgressBar}>
+                    <View style={[S.miniProgressFill, { width: `${progress}%` }]} />
+                  </View>
+                  <Text style={S.islandProgressTxt}>{island.completedMissions}/{island.totalMissions}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 
   const renderProgressMap = () => isMemberOfAny && (
@@ -916,7 +1169,7 @@ export default function LeagueScreen() {
         missions={LEAGUE_MISSIONS}
         xpPercent={progressPercent}
         leagueName={leagues.find(l => l.users.includes(USER_ID))?.name ?? 'BRONCE MÍTICO'}
-        xpLabel={`${userProfile.xp} / ${currentThreshold} XP`}
+        xpLabel={`${xp} / ${currentThreshold} XP`}
         onMissionComplete={(id) => {
           handleSimulateTransaction(150, `Nodo ${id} explorado`);
         }}
@@ -936,7 +1189,7 @@ export default function LeagueScreen() {
           const isMember   = league.users.includes(USER_ID);
           const myStats    = league.ranking.find(r => r.userId === USER_ID);
           const isExpanded = expandedLeague === league.id;
-          const isLocked   = userProfile.level < league.minLevel;
+          const isLocked   = profile.level < league.minLevel;
 
           return (
             <View key={league.id} style={[S.leagueCard, isLocked && S.leagueLocked]}>
@@ -1031,6 +1284,50 @@ export default function LeagueScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <EnemyAlmanaque 
+        visible={showAlmanaque} 
+        onClose={() => setShowAlmanaque(false)} 
+        onSelectBoss={(b) => {
+          setShowAlmanaque(false);
+          if (b.hp) { // Arena Mob (no map node)
+            const bossAdapter = BossEngine.generateFromDebt({ 
+                id: `arena_bot_${b.id}`, 
+                type: 'abyss', // generic
+                amount: b.hp * 10, 
+                daysOverdue: 15 
+            });
+            bossAdapter.name = b.name;
+            bossAdapter.maxHp = b.maxHp || b.hp;
+            bossAdapter.hp = b.hp;
+            // Opcional: bossAdapter.sprite = b.sprite_path // si aplica
+
+            setActiveBoss(bossAdapter);
+            setActiveFighter({ ...currentClass, name: currentClass.name });
+            setInPreCombat(true);
+          } else { // Boss (from map node)
+            const boss = BossEngine.generateFromDebt({ 
+                id: `map_boss_${b.id}`, 
+                type: b.type as any,
+                amount: b.amount, 
+                daysOverdue: b.daysOverdue 
+            });
+            setActiveBoss(boss);
+            setActiveFighter({ ...currentClass, name: currentClass.name });
+            setInPreCombat(true);
+          }
+        }}
+      />
+      
+      {/* MODAL CÓDICE & TIENDA IAP (Fase 1) */}
+      <AdventurerCodex
+        visible={showCodex}
+        onClose={() => setShowCodex(false)}
+      />
+      <DetailedIslandMap 
+        island={selectedIsland}
+        visible={selectedIsland !== null}
+        onClose={() => setSelectedIsland(null)}
+      />
       <LeagueJoinModal
         visible={joinedLeague !== null}
         leagueName={joinedLeague?.name ?? ''}
@@ -1075,6 +1372,8 @@ export default function LeagueScreen() {
           {renderHeroBanner()}
           <WeatherBanner />
           {renderQuickMissions()}
+          {renderIslandGrid()}
+          {renderBossPreview()}
           {renderProgressMap()}
 
           {renderLeagues()}

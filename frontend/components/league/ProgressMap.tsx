@@ -10,6 +10,8 @@ import { Image as RNImage } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { NodeType, NodeState, MapNode, WorldZone, TinySwordsNPC } from '../../data/islands';
+import { BudgetPuzzle } from '../puzzles/BudgetPuzzle';
 
 
 const { width: SW } = Dimensions.get('window');
@@ -162,30 +164,7 @@ const TileGenerators = {
 };
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-export type NodeType = 'start' | 'puzzle' | 'boss' | 'lore' | 'reward' | 'end';
-export type NodeState = 'done' | 'active' | 'locked';
-
-export interface MapNode {
-  id: number;
-  label: string;
-  icon: string;
-  x: number;
-  y: number;
-  state: NodeState;
-  type: NodeType;
-  puzzle?: any;
-  boss?: any;
-  lore?: any;
-  reward?: any;
-}
-
-export interface WorldZone {
-  id: string;
-  name: string;
-  themeColor: string;
-  nodes: MapNode[];
-  tileType?: 'grass' | 'neon' | 'dark' | 'sky';
-}
+// Los tipos de MapNode y WorldZone se importan ahora centralizados desde data/islands.ts
 
 export interface MapMission {
   id: string;
@@ -276,6 +255,13 @@ const SpriteSheet = ({ source, frameWidth, frameHeight, frameCount, scale = 1, d
   );
 };
 
+const getNPCSprite = (npc: TinySwordsNPC) => {
+  if (npc.faction === 'yellow' && npc.type === 'archer') return require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Yellow Units/Archer/Archer_Idle.png');
+  if (npc.faction === 'purple' && npc.type === 'mage') return require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Purple Units/Pawn/Pawn_Idle.png'); // Pawn como fallback si mage no existe
+  if (npc.faction === 'red') return require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Red Units/Warrior/Warrior_Idle.png');
+  return require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Blue Units/Warrior/Warrior_Idle.png');
+};
+
 const PixelNode = ({ node, width, height, onPress }: any) => {
 
   const px = (node.x / 100) * width;
@@ -341,7 +327,7 @@ const PixelNode = ({ node, width, height, onPress }: any) => {
         {node.type === 'boss' && !done && (
           <View style={{ position: 'absolute', top: -16, left: -12, pointerEvents: 'none' }}>
             <SpriteSheet 
-              source={require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Red Units/Warrior/Warrior_Idle.png')}
+              source={node.guardian ? getNPCSprite(node.guardian) : require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Red Units/Warrior/Warrior_Idle.png')}
               frameWidth={192} frameHeight={192} frameCount={6} scale={0.4} duration={900}
             />
           </View>
@@ -352,7 +338,7 @@ const PixelNode = ({ node, width, height, onPress }: any) => {
       {active && (
         <View style={{ position: 'absolute', top: -45, left: -20, pointerEvents: 'none', zIndex: 10 }}>
           <SpriteSheet 
-            source={require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Blue Units/Warrior/Warrior_Idle.png')}
+            source={node.guardian ? getNPCSprite(node.guardian) : require('../../assets/TinySwords/Tiny Swords (Free Pack)/Units/Blue Units/Warrior/Warrior_Idle.png')}
             frameWidth={192} frameHeight={192} frameCount={6} scale={0.45} duration={800}
           />
         </View>
@@ -418,18 +404,30 @@ export function ProgressMap({
   zones = [],
 }: ProgressMapProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [showBudgetPuzzle, setShowBudgetPuzzle] = useState(false);
   const [selectedNode, setSelectedNode] = useState<MapNode | null>(null);
   const [selectedZone, setSelectedZone] = useState<WorldZone | null>(null);
-
 
   const handleNodePress = (node: MapNode) => {
     const zone = zones.find(z => z.nodes.some(n => n.id === node.id));
     if (node.type === 'boss' && node.state === 'active') {
-      onBossFight?.(node);
+      if (node.puzzleType) {
+         setSelectedNode(node);
+         if (node.puzzleType === 'budget_50_30_20') setShowBudgetPuzzle(true);
+      } else {
+         onBossFight?.(node);
+      }
       return;
     }
     setSelectedNode(node);
     setSelectedZone(zone || null);
+    
+    // Si la misión es explícitamente BudgetPuzzle en un nodo intermedio/activo
+    if (node.state === 'active' && node.puzzleType === 'budget_50_30_20') {
+      setShowBudgetPuzzle(true);
+      return;
+    }
+    
     setModalVisible(true);
   };
 
@@ -492,17 +490,20 @@ export function ProgressMap({
                 
                 {selectedNode?.type === 'puzzle' && selectedNode.puzzle?.options && (
                     <View style={S.puzzleOptions}>
-                        {selectedNode.puzzle.options.map((opt: string, i: number) => (
-                            <TouchableOpacity key={i} style={S.puzzleBtn} onPress={() => {
-                                if (i === selectedNode.puzzle.answer) {
-                                    handleComplete();
-                                } else {
-                                    Alert.alert('Incorrecto', selectedNode.puzzle.hint);
-                                }
-                            }}>
-                                <Text style={S.puzzleBtnText}>{opt}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {selectedNode.puzzle.options.map((opt: string, i: number) => {
+                            const p = selectedNode?.puzzle;
+                            return (
+                                <TouchableOpacity key={i} style={S.puzzleBtn} onPress={() => {
+                                    if (p && i === p.answer) {
+                                        handleComplete();
+                                    } else {
+                                        Alert.alert('Incorrecto', p?.hint || 'Intentalo de nuevo');
+                                    }
+                                }}>
+                                    <Text style={S.puzzleBtnText}>{opt}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
                 )}
             </View>
@@ -513,6 +514,14 @@ export function ProgressMap({
                         <Text style={S.modalCloseText}>[ COMPLETAR ]</Text>
                     </TouchableOpacity>
                 )}
+                {selectedNode?.puzzleType === 'budget_50_30_20' && (
+                    <TouchableOpacity style={S.modalClose} onPress={() => {
+                        setModalVisible(false);
+                        setShowBudgetPuzzle(true);
+                    }}>
+                        <Text style={S.modalCloseText}>[ INICIAR REVISIÓN FINANCIERA ]</Text>
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity style={[S.modalClose, { backgroundColor: '#333', marginTop: 8 }]} onPress={() => setModalVisible(false)}>
                     <Text style={S.modalCloseText}>[ CERRAR ]</Text>
                 </TouchableOpacity>
@@ -520,6 +529,17 @@ export function ProgressMap({
           </View>
         </View>
       </Modal>
+
+      {/* INTEGRADOR DE MINIJUEGOS (🧩 PHASE 1) */}
+      <BudgetPuzzle 
+        visible={showBudgetPuzzle} 
+        onClose={() => setShowBudgetPuzzle(false)} 
+        onComplete={(success, score) => {
+           setShowBudgetPuzzle(false);
+           if (success) handleComplete();
+           else Alert.alert('Fallaste', 'No lograste categorizar todos los ingresos antes de que se acabara el tiempo. ¡Inténtalo de nuevo!');
+        }} 
+      />
     </View>
   );
 }

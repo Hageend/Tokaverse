@@ -1,26 +1,21 @@
-// components/quest/AdventurerCodex.tsx
-// TokaVerse — Códice 2.0: Evolución Mística-Cyberpunk
-// Portal Alquímico Híbrido · Botones Glitch Sutil · Optimización PC de Alta Fidelidad
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
     View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, 
-    Dimensions, Platform, Alert, useWindowDimensions 
+    Dimensions, useWindowDimensions, Platform
 } from 'react-native';
 import { Image } from 'expo-image';
-import Svg, { Polygon, Rect, G, Circle } from 'react-native-svg';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useInventoryStore } from '../../store/useInventoryStore';
-import { ITEM_SPRITES, COIN_SPRITES, CHAR_SPRITES } from '../../data/classSkills';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { ITEM_SPRITES, CHAR_SPRITES } from '../../data/classSkills';
+import { RPG_PETS } from '../../data/pets';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
-    useSharedValue, useAnimatedStyle, withTiming, withRepeat, 
-    Easing, withSequence, withDelay, FadeIn, FadeOut, ZoomIn, FadeInDown,
-    withSpring
+    ZoomIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withSpring
 } from 'react-native-reanimated';
 import { PurchaseSuccessAnimation } from './PurchaseSuccessAnimation';
+import { StarCoinShop } from '../ui/StarCoinShop';
 
-// ─── Diseño de Colores (Parchment & Magic) ───────────────────────────────────
+// ─── Variables de Diseño Códice (HTML port) ─────────────────────────────────
 const C = {
     parchment:      '#2a1a0e',
     parchmentMid:   '#1e110a',
@@ -32,16 +27,18 @@ const C = {
     accentGreen:    '#1a5c2a',
     borderPixel:    '#6b4420',
     borderBright:   '#c8860a',
-    glitch:         '#ff004d',
-    glitchGlow:     '#ff0066',
-    portalColors:   ['#ffb61e', '#fa9542', '#34d399', '#60a5fa', '#a78bfa', '#f472b6'],
+    glow:           '#d4a017',
+    bgCard:         '#1a0e04',
+    bgFrame:        '#0d0704',
 };
+
+const fontFam = Platform.OS === 'ios' ? 'Courier' : 'monospace';
 
 // ─── Helpers Responsivos ─────────────────────────────────────────────────────
 const fs = (mobile: number, desktop: number, isDesktop: boolean) => isDesktop ? desktop : mobile;
 
 // ─── Datos ──────────────────────────────────────────────────────────────────
-const MAGE_ITEMS = [
+const HEROES = [
     { id: 'warrior',  name: 'SAMURAI',   sub: 'Guerrero', price: 0,    elem: '⚔', elemColor: '#8b1a1a' },
     { id: 'archer',   name: 'YUSHU',     sub: 'Arquero',  price: 0,    elem: '🏹', elemColor: '#1a5c2a' },
     { id: 'mage',     name: 'MAHŌTSUKAI', sub: 'Maga',    price: 0,    elem: '❄', elemColor: '#1a3a6b' },
@@ -49,179 +46,44 @@ const MAGE_ITEMS = [
     { id: 'hacker',   name: 'HACKER',    sub: 'Ciber-Mago', price: 500, elem: '⚡', elemColor: '#6b1a6b' },
     { id: 'banker',   name: 'SHŌNIN',    sub: 'Mercader', price: 750,  elem: '💰', elemColor: '#6b4a1a' },
     { id: 'magedark', name: 'ANKOKU',    sub: 'Maga Oscura', price: 1000, elem: '☽', elemColor: '#2a1a4a' },
-    { id: 'dog',      name: 'INU',       sub: 'Can Guardián', price: 300, elem: '🐾', elemColor: '#3a2a1a' },
-    { id: 'cat',      name: 'NEKO',      sub: 'Gato Suerte', price: 250, elem: '🐱', elemColor: '#ffaa00' },
-    { id: 'fox',      name: 'KITSUNE',   sub: 'Espíritu', price: 400, elem: '🦊', elemColor: '#ff4400' },
+    { id: 'dog',      name: 'INU',       sub: 'Can Guard.', price: 300, elem: '🐾', elemColor: '#3a2a1a' },
 ];
 
-const SHOP_ITEMS = [
-    { name: 'POCIÓN HP', price: 25, icon: '🧪', color: '#8b1a1a', sprite: ITEM_SPRITES.potion },
-    { name: 'POCIÓN MANÁ', price: 30, icon: '💧', color: '#1a3a6b', sprite: ITEM_SPRITES.potion_mana },
+const ITEMS = [
+    { name: 'POCIÓN HP',    price: 25,  icon: '🧪', color: '#8b1a1a', sprite: ITEM_SPRITES.potion },
+    { name: 'POCIÓN MANÁ',  price: 30,  icon: '💧', color: '#1a3a6b', sprite: ITEM_SPRITES.potion_mana },
+    { name: 'MEGA POCIÓN',  price: 60,  icon: '⚗', color: '#6b1a6b', sprite: ITEM_SPRITES.potion_strong },
     { name: 'ANILLO PODER', price: 250, icon: '💍', color: '#6b4a1a', sprite: ITEM_SPRITES.ring_strong },
-    { name: 'ESPADA DIAMANTE', price: 800, icon: '⚔', color: '#1a5c6b', sprite: ITEM_SPRITES.sword_diamond },
+    { name: 'ESPADA DIAMANTE',price: 800, icon: '⚔', color: '#1a5c6b', sprite: ITEM_SPRITES.sword_diamond },
+    { name: 'ESCUDO ELEM.', price: 500, icon: '🛡', color: '#3a5c1a', sprite: ITEM_SPRITES.shield_elemental },
 ];
 
-const CARD_ITEMS = [
+const CARDS = [
     { name: 'CARTA XP',    price: 150, icon: '✦', color: '#6b4a1a', sprite: ITEM_SPRITES.card_xp },
     { name: 'CARTA VIDA',  price: 200, icon: '♥', color: '#8b1a1a', sprite: ITEM_SPRITES.card_hp },
     { name: 'CARTA MANÁ',  price: 200, icon: '◆', color: '#1a3a6b', sprite: ITEM_SPRITES.card_mana },
-    { name: 'CARTA MAESTRA', price: 500, icon: '★', color: '#6b1a6b', sprite: ITEM_SPRITES.card_strong },
+    { name: 'CARTA MAESTRA',price: 500,icon: '★', color: '#6b1a6b', sprite: ITEM_SPRITES.card_strong },
 ];
 
-// ─── Componentes ─────────────────────────────────────────────────────────────
-
-/** Botón Octogonal estilo Cyberpunk/Glitch */
-const GlitchButton = ({ children, onPress, color = C.borderBright, isDesktop, style: extraStyle }: any) => {
-    const scale = useSharedValue(1);
-    const glitchX = useSharedValue(0);
-    const glitchY = useSharedValue(0);
-    const opacity = useSharedValue(1);
-
-    const runGlitch = () => {
-        glitchX.value = withRepeat(withSequence(withTiming(2, { duration: 50 }), withTiming(-2, { duration: 50 }), withTiming(0, { duration: 50 })), 3, false);
-        glitchY.value = withRepeat(withSequence(withTiming(-1, { duration: 50 }), withTiming(1, { duration: 50 }), withTiming(0, { duration: 50 })), 3, false);
-        opacity.value = withSequence(withTiming(0.8, { duration: 50 }), withTiming(1, { duration: 100 }));
-    };
-
-    useEffect(() => {
-        const interval = setInterval(() => { if (Math.random() > 0.8) runGlitch(); }, 3000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }, { translateX: glitchX.value }, { translateY: glitchY.value }],
-        opacity: opacity.value
-    }));
-
-    return (
-        <TouchableOpacity 
-            onPress={onPress} 
-            activeOpacity={1} 
-            onPressIn={() => scale.value = withSpring(0.95)} 
-            onPressOut={() => scale.value = withSpring(1)}
-            style={[S.glitchContainer, extraStyle]}
-        >
-            <Animated.View style={[S.glitchShell, animatedStyle]}>
-                <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
-                    {/* Forma de Clip-Path Octogonal */}
-                    <Polygon 
-                        points="15,0 85,0 100,30 100,70 85,100 15,100 0,70 0,30" 
-                        fill="transparent" 
-                        stroke={color} 
-                        strokeWidth="3" 
-                        scale="0.95"
-                    />
-                </Svg>
-                {/* Esquinas (Pips) */}
-                <View style={[S.gCorner, S.gTL, { backgroundColor: color }]} />
-                <View style={[S.gCorner, S.gTR, { backgroundColor: color }]} />
-                <View style={[S.gCorner, S.gBL, { backgroundColor: color }]} />
-                <View style={[S.gCorner, S.gBR, { backgroundColor: color }]} />
-                
-                <Text style={[S.glitchTxt, { color, fontSize: fs(7, 11, isDesktop) }]}>{children}</Text>
-            </Animated.View>
-        </TouchableOpacity>
-    );
-};
-
-/** Portal Místico Híbrido (Alquimia + Anillos Cinéticos) */
-const MagicPortal = () => {
-    const rotOuter = useSharedValue(0);
-    const rotInner = useSharedValue(0);
-    
-    useEffect(() => {
-        // Velocidades duplicadas para un efecto de poder cinético
-        rotOuter.value = withRepeat(withTiming(-360, { duration: 6000, easing: Easing.linear }), -1, false);
-        rotInner.value = withRepeat(withTiming(360, { duration: 3500, easing: Easing.linear }), -1, false);
-    }, []);
-
-    const outerStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotOuter.value}deg` }] }));
-    const innerStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotInner.value}deg` }] }));
-
-    return (
-        <View style={S.pWrap}>
-            {/* Capas Alquímicas Sincronizadas */}
-            <Animated.View style={[S.pc1, outerStyle]}>
-                <View style={S.pc2}>
-                    <Animated.View style={[S.pc3, innerStyle]}>
-                        <View style={S.pr1}>
-                            <View style={S.pc4}>
-                                <View style={S.pr2}><View style={S.pr3} /></View>
-                            </View>
-                            <View style={S.pc5} />
-                            <View style={S.pc6} />
-                        </View>
-                    </Animated.View>
-                </View>
-            </Animated.View>
-
-            {/* Vórtice de 12 Anillos de Alta Energía (Mejor Rendimiento + Impacto) */}
-            <View style={S.ringLoader}>
-                {Array.from({ length: 12 }).map((_, i) => (
-                    <KineticRing key={i} index={i} total={12} />
-                ))}
-            </View>
-
-            <Text style={S.pTxt}>CANALIZANDO DESTINO...</Text>
-        </View>
-    );
-};
-
-const KineticRing = ({ index, total }: any) => {
-    const rot = useSharedValue(0);
-    const scale = useSharedValue(1);
-    const opacityVal = useSharedValue(0.4);
-    const color = C.portalColors[index % C.portalColors.length];
-
-    useEffect(() => {
-        // Rotación ultra-rápida y escalonada
-        rot.value = withDelay(
-            index * -400,
-            withRepeat(withTiming(360, { duration: 4000, easing: Easing.bezier(0.4, 0, 0.2, 1) }), -1, false)
-        );
-        // Oscilación de energía (escala y brillo)
-        scale.value = withRepeat(withTiming(1.3, { duration: 1500, easing: Easing.inOut(Easing.quad) }), -1, true);
-        opacityVal.value = withRepeat(withTiming(1, { duration: 1200 }), -1, true);
-    }, []);
-
-    const style = useAnimatedStyle(() => ({
-        transform: [{ rotate: `${rot.value}deg` }, { scale: scale.value }],
-        borderColor: color,
-        opacity: opacityVal.value,
-        borderWidth: index % 2 === 0 ? 3 : 1.5, // Variación de grosor para profundidad
-    }));
-
-    return <Animated.View style={[S.pRing, style]} />;
-};
-
-// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
-    const [phase, setPhase] = useState<'cover' | 'portal' | 'open'>('cover');
-    const [tab, setTab] = useState<'heroes' | 'items' | 'cards'>('heroes');
+    const [tab, setTab] = useState<'heroes' | 'pets' | 'items' | 'cards' | 'shop'>('heroes');
     const { width } = useWindowDimensions();
     const isDesktop = width >= 1024;
-    const portalTimer = useRef<any>(null);
 
-    const { starCoins, unlockedClasses, unlockClass, addStarCoins } = usePlayerStore();
+    const { 
+        starCoins, unlockedClasses, unlockClass, addStarCoins,
+        ownedPets, unlockPet, equippedPet, setEquippedPet
+    } = usePlayerStore();
     const { addItem } = useInventoryStore();
 
     const [showConfetti, setShowConfetti] = useState(false);
     const [successItem, setSuccessItem] = useState<any>(null);
 
-    useEffect(() => { if (visible) setPhase('cover'); }, [visible]);
-
-    const handleCoverPress = () => {
-        setPhase('portal');
-        portalTimer.current = setTimeout(() => { setPhase('open'); }, 2200); // Portal más rápido y agresivo
-    };
-    
-    useEffect(() => () => { if (portalTimer.current) clearTimeout(portalTimer.current); }, []);
-
-    const handleAction = (item: any, type: 'hero' | 'item' | 'card') => {
+    const handleAction = (item: any, type: 'hero' | 'item' | 'card' | 'pet') => {
         if (type === 'hero') {
-            if (unlockedClasses.includes(item.id)) return Alert.alert('📖 Registro', `${item.name} ya está en tus filas.`);
-            if (starCoins < item.price) return Alert.alert('⚠ Monedas!', 'No tienes suficientes Star Coins.');
+            if (unlockedClasses.includes(item.id)) return alert(`${item.name} ya está en tus filas.`);
+            if (starCoins < item.price) return alert('No tienes suficientes Star Coins.');
 
             const ok = addItem({
                 name: item.name, icon: '✨', rarity: 'rare', type: 'card', 
@@ -234,12 +96,22 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
                 setSuccessItem({ ...item, type: 'hero' });
                 setShowConfetti(true);
             }
+        } else if (type === 'pet') {
+            if (ownedPets.includes(item.id)) {
+                setEquippedPet(item.id);
+                return alert(`${item.name} ahora te acompaña.`);
+            }
+            if (starCoins < item.cost) return alert('No tienes suficientes Star Coins.');
+            if (unlockPet(item.id)) {
+                addStarCoins(-item.cost);
+                setSuccessItem({ id: item.id, name: item.name, icon: '🐾', type: 'pet', sprite: item.stage1.sprite });
+                setShowConfetti(true);
+            }
         } else {
-            if (starCoins < item.price) return Alert.alert('⚠ Monedas!', 'No tienes suficientes Star Coins.');
+            if (starCoins < item.price) return alert('No tienes suficientes Star Coins.');
             const ok = addItem({
                 name: item.name, icon: item.icon, rarity: 'uncommon',
                 type: type === 'item' ? 'consumable' : 'card',
-                pixelArt: item.name.toLowerCase().includes('poción') ? 'potion' : 'item_card',
             } as any, 'Códice');
 
             if (ok) {
@@ -250,92 +122,105 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
         }
     };
 
-    // Dimensiones Responsivas
-    const GR_W = isDesktop ? Math.min(width * 0.85, 1200) : width * 0.94;
-    const GR_H = isDesktop ? 750 : 660;
-    const spineW = isDesktop ? 64 : 44;
-    const paddingX = 16;
-    const pageWidth = GR_W - spineW - paddingX * 2;
-    const cardWidth = isDesktop ? (pageWidth - 16 * 3) / 4 : (pageWidth - 10) / 2;
-
     if (!visible) return null;
 
     return (
         <Modal visible={visible} transparent animationType="fade">
             <View style={S.overlay}>
+                {/* Fondo translúcido tap to close */}
                 <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
                 
-                <Animated.View entering={ZoomIn} style={[S.grimoireShell, { width: GR_W, height: GR_H }]}>
+                <Animated.View entering={ZoomIn} style={[{
+                    backgroundColor: '#000', // Outline simulation
+                    padding: 1, 
+                    shadowColor: '#000',
+                    shadowOffset: { width: 6, height: 6 },
+                    shadowOpacity: 1,
+                    shadowRadius: 0,
+                    elevation: 10,
+                }, isDesktop ? { width: 800, height: 600 } : { width: '94%', height: '85%' }]}>
+                  <View style={[S.grimoireShell, { flex: 1 }]}>
+                    <View style={S.scanlines} pointerEvents="none" />
                     
-                    {phase === 'cover' && (
-                        <TouchableOpacity style={S.coverFull} onPress={handleCoverPress}>
-                            <View style={[S.coverBg, { backgroundColor: '#3E2723', borderColor: '#5D4037', borderWidth: 8 }]} />
-                            <View style={S.coverOverlay}>
-                                <MaterialCommunityIcons name="book-open-variant" size={fs(60, 100, isDesktop)} color={C.ink} />
-                                <Text style={[S.coverTitle, { fontSize: fs(24, 42, isDesktop) }]}>CÓDICE DE MERCADER</Text>
-                                <Text style={[S.coverSub, { fontSize: fs(10, 16, isDesktop) }]}>TOCA PARA ACTIVAR EL CÍRCULO ALQUÍMICO</Text>
-                            </View>
-                        </TouchableOpacity>
-                    )}
+                    {/* Corner runes */}
+                    <Text style={[S.corner, S.cornerTL]}>◆</Text>
+                    <Text style={[S.corner, S.cornerTR]}>◆</Text>
+                    <Text style={[S.corner, S.cornerBL]}>◆</Text>
+                    <Text style={[S.corner, S.cornerBR]}>◆</Text>
 
-                    {phase === 'portal' && <MagicPortal />}
+                    <View style={{ flex: 1, flexDirection: 'row' }}>
+                        {/* SPINE / TABS */}
+                        <View style={S.spine}>
+                            <TabBtn icon="⚔" label="HÉROES" active={tab === 'heroes'} onPress={() => setTab('heroes')} />
+                            <TabBtn icon="🐲" label="DRAGONES" active={tab === 'pets'} onPress={() => setTab('pets')} />
+                            <TabBtn icon="⚗" label="OBJETOS" active={tab === 'items'} onPress={() => setTab('items')} />
+                            <TabBtn icon="♦" label="CARTAS" active={tab === 'cards'} onPress={() => setTab('cards')} />
+                            <View style={{ flex: 1 }} />
+                            <TabBtn icon="💎" label="TIENDA" active={tab === 'shop'} onPress={() => setTab('shop')} isGold />
+                        </View>
 
-                    {phase === 'open' && (
-                        <View style={{ flex: 1, flexDirection: 'row' }}>
-                            <View style={S.scanlines} pointerEvents="none" />
-                            
-                            {/* SPINE (Sidebar) */}
-                            <View style={[S.spine, { width: spineW }]}>
-                                <TabBtn icon="⚔" label="Héroes" active={tab === 'heroes'} onPress={() => setTab('heroes')} isDesktop={isDesktop} />
-                                <TabBtn icon="⚗" label="Objetos" active={tab === 'items'} onPress={() => setTab('items')} isDesktop={isDesktop} />
-                                <TabBtn icon="♦" label="Cartas" active={tab === 'cards'} onPress={() => setTab('cards')} isDesktop={isDesktop} />
-                            </View>
-
-                            {/* MAIN PAGE */}
-                            <View style={S.page}>
-                                <View style={[S.header, { paddingBottom: fs(10, 18, isDesktop), marginBottom: fs(15, 22, isDesktop) }]}>
+                        {/* PAGE */}
+                        <View style={S.page}>
+                            <View style={S.pageHeader}>
+                                <View style={S.titleRow}>
                                     <View>
-                                        <Text style={[S.headerTitle, { fontSize: fs(14, 24, isDesktop) }]}>REGISTRO DE AVENTUREROS</Text>
-                                        <Text style={[S.headerSub, { fontSize: fs(7, 11, isDesktop) }]}>ORDEN DEL DESTINO • EDICIÓN PC</Text>
+                                        <Text style={S.grimoireTitle}>CÓDICE{'\n'}MERCADER</Text>
+                                        <Text style={S.grimoireSub}>ORDEN DE AVENTUREROS</Text>
                                     </View>
-                                    <View style={S.coinsRow}>
-                                        <Image source={COIN_SPRITES.star} style={{ width: fs(14, 22, isDesktop), height: fs(14, 22, isDesktop) }} />
-                                        <Text style={[S.coinsTxt, { fontSize: fs(10, 16, isDesktop) }]}>{starCoins}</Text>
+                                    <View style={S.goldCounter}>
+                                        <Image source={require('../../assets/images/coin_estrella.png')} style={S.starCoinIcon} contentFit="contain" />
+                                        <Text style={S.goldCounterTxt}>{starCoins.toLocaleString()}</Text>
                                     </View>
                                 </View>
-
-                                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
-                                    <View style={S.sectionLblRow}>
-                                        <Text style={[S.sectionLbl, { fontSize: fs(8, 12, isDesktop) }]}>{tab.toUpperCase()}</Text>
-                                        <View style={S.sectionLine} />
-                                    </View>
-
-                                    <View style={[S.grid, { gap: isDesktop ? 16 : 10 }]}>
-                                        {tab === 'heroes' && MAGE_ITEMS.map((h, i) => (
-                                            <HeroCard key={h.id} item={h} index={i} isDesktop={isDesktop} cardWidth={cardWidth} owned={unlockedClasses.includes(h.id)} onPress={() => handleAction(h, 'hero')} />
-                                        ))}
-                                        {tab === 'items' && SHOP_ITEMS.map((item, i) => (
-                                            <ShopCard key={item.name} item={item} index={i} type="item" isDesktop={isDesktop} cardWidth={cardWidth} onPress={() => handleAction(item, 'item')} />
-                                        ))}
-                                        {tab === 'cards' && CARD_ITEMS.map((item, i) => (
-                                            <ShopCard key={item.name} item={item} index={i} type="card" isDesktop={isDesktop} cardWidth={cardWidth} onPress={() => handleAction(item, 'card')} />
-                                        ))}
-                                    </View>
-                                </ScrollView>
-
-                                <TouchableOpacity style={[S.closeBar, { height: fs(50, 64, isDesktop) }]} onPress={onClose}>
-                                    <Text style={[S.closeBarTxt, { fontSize: fs(8, 11, isDesktop) }]}>▼ CERRAR CÓDICE ▼</Text>
-                                </TouchableOpacity>
+                                <Text style={S.headerDivider}>✦ ─────────── ✦</Text>
                             </View>
+
+                            {/* TABS CONTENT */}
+                            <Text style={S.sectionLabel}>
+                                {tab === 'heroes' ? 'REGISTRO DE HÉROES' :
+                                 tab === 'pets' ? 'INCUBADORA DE DRAGONES' :
+                                 tab === 'items' ? 'TIENDA DE OBJETOS' :
+                                 tab === 'cards' ? 'COLECCIÓN DE CARTAS' :
+                                 'TESORO IAP'}
+                            </Text>
+
+                            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+                                {tab === 'shop' ? (
+                                    <StarCoinShop />
+                                ) : (
+                                    <View style={S.heroGrid}>
+                                        {tab === 'heroes' && HEROES.map((h) => 
+                                            <HeroCard key={h.id} item={h} owned={unlockedClasses.includes(h.id)} onPress={() => handleAction(h, 'hero')} />
+                                        )}
+                                        {tab === 'pets' && RPG_PETS.map((pet) => 
+                                            <PetCard key={pet.id} pet={pet} owned={ownedPets.includes(pet.id)} equipped={equippedPet === pet.id} onPress={() => handleAction(pet, 'pet')} />
+                                        )}
+                                        {tab === 'items' && ITEMS.map((item) => 
+                                            <ShopCard key={item.name} item={item} onPress={() => handleAction(item, 'item')} />
+                                        )}
+                                        {tab === 'cards' && CARDS.map((item) => 
+                                            <ShopCard key={item.name} item={item} onPress={() => handleAction(item, 'card')} />
+                                        )}
+                                    </View>
+                                )}
+                            </ScrollView>
+
+                            {/* CLOSE BAR */}
+                            <TouchableOpacity style={S.closeBar} onPress={onClose}>
+                                <Text style={S.closeBarSign}>▼</Text>
+                                <Text style={S.closeBarText}>CERRAR CÓDICE</Text>
+                                <Text style={S.closeBarSign}>▼</Text>
+                            </TouchableOpacity>
                         </View>
-                    )}
+                    </View>
+                  </View>
                 </Animated.View>
 
                 {showConfetti && successItem && (
                     <PurchaseSuccessAnimation 
                         item={{
                             id: successItem.id || successItem.name, name: successItem.name,
-                            type: successItem.type === 'hero' ? 'hero' : 'item',
+                            type: successItem.type === 'hero' ? 'hero' : (successItem.type === 'pet' ? 'card' : 'item'),
                             icon: successItem.icon || '🌟', sprite: successItem.sprite
                         }} 
                         onClose={() => { setShowConfetti(false); setSuccessItem(null); }} 
@@ -346,114 +231,348 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
     );
 };
 
-// ─── Sub-Componentes Internos ────────────────────────────────────────────────
-
-const TabBtn = ({ icon, label, active, onPress, isDesktop }: any) => (
-    <TouchableOpacity style={[S.tabBtn, active && S.tabBtnActive, isDesktop && { height: 64 }]} onPress={onPress}>
-        <Text style={[S.tabIcon, { fontSize: fs(18, 24, isDesktop), color: active ? C.borderBright : C.inkDim }]}>{icon}</Text>
-        {isDesktop && <Text style={{ color: active ? C.borderBright : C.inkDim, fontSize: 8, marginTop: 4, fontWeight: '900' }}>{label}</Text>}
-        {active && <View style={S.tabIndicator} />}
+const TabBtn = ({ icon, label, active, onPress, isGold = false }: any) => (
+    <TouchableOpacity style={[S.tabBtn, active && S.tabBtnActive]} onPress={onPress}>
+        <Text style={[S.tabIcon, isGold && { color: C.inkBright }, active && { color: C.borderBright }]}>{icon}</Text>
+        <Text style={[S.tabLabel, isGold && { color: '#FFF' }, active && { color: C.borderBright }]}>{label}</Text>
+        {active && <View style={S.tabBtnActiveLine} />}
     </TouchableOpacity>
 );
 
-const HeroCard = ({ item, owned, onPress, index, isDesktop, cardWidth }: any) => {
+const HeroCard = ({ item, owned, onPress }: any) => {
     const sprite = (CHAR_SPRITES as any)[item.id] || CHAR_SPRITES.hero_base;
     return (
-        <Animated.View entering={FadeInDown.delay(index * 40)} style={[S.card, { width: cardWidth }, owned && S.cardOwned]}>
-            <View style={[S.spriteFrame, isDesktop && { maxWidth: 160, maxHeight: 160, alignSelf: 'center' }]}>
+        <View style={[S.heroCard, owned && S.heroCardOwned]}>
+            {owned && <Text style={S.ownedStar}>★</Text>}
+            <View style={S.spriteFrame}>
                 <Image source={sprite} style={S.pixelSprite} contentFit="contain" />
-                {!owned && <View style={S.lockOverlay}><Ionicons name="lock-closed" size={fs(16, 24, isDesktop)} color={C.inkDim} /></View>}
+                {!owned && <View style={S.lockedOverlay}><View style={S.pxLock}><View style={S.pxLockShackle}/><View style={S.pxLockBody}/></View></View>}
             </View>
-            <Text style={[S.heroName, { fontSize: fs(8, 13, isDesktop) }]}>{item.name}</Text>
-            <Text style={[S.heroClass, { fontSize: fs(6, 10, isDesktop) }]}>{item.sub}</Text>
-            
+            <Text style={S.heroName} numberOfLines={1}>{item.name}</Text>
+            <Text style={S.heroClass}>{item.sub}</Text>
+            <View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: `${item.elemColor}44`, paddingHorizontal: 4, paddingVertical: 2, marginBottom: 8 }}>
+                <Text style={{ color: item.elemColor, fontSize: 8, fontFamily: fontFam, fontWeight: '800' }}>{item.elem} {item.sub.split(' ')[0].toUpperCase()}</Text>
+            </View>
             {owned ? (
-                <View style={S.ownedBanner}><Text style={[S.ownedTxt, { fontSize: fs(6, 9, isDesktop) }]}>✔ REGISTRADO</Text></View>
+                <View style={S.ownedBanner}><Text style={S.ownedBannerTxt}>✔ REGISTRADO</Text></View>
             ) : (
-                <GlitchButton onPress={onPress} color={C.borderBright} isDesktop={isDesktop} style={{ marginTop: 8 }}>
-                    {item.price}
-                </GlitchButton>
+                <TouchableOpacity style={S.buyBtn} onPress={onPress}>
+                    <Text style={S.buyBtnStar}>★</Text>
+                    <Text style={S.buyBtnTxt}>{item.price}</Text>
+                </TouchableOpacity>
             )}
-        </Animated.View>
+        </View>
     );
 };
 
-const ShopCard = ({ item, onPress, index, isDesktop, cardWidth }: any) => (
-    <Animated.View entering={FadeInDown.delay(index * 40)} style={[S.card, { width: cardWidth }]}>
-        <View style={[S.spriteFrame, isDesktop && { maxWidth: 160, maxHeight: 160, alignSelf: 'center' }]}>
-            {item.sprite ? <Image source={item.sprite} style={S.pixelSprite} contentFit="contain" /> : <Text style={{ fontSize: fs(24, 40, isDesktop) }}>{item.icon}</Text>}
+const PetCard = ({ pet, owned, equipped, onPress }: any) => (
+    <View style={[S.heroCard, equipped && { borderColor: C.accentGreen }]}>
+        {equipped && <Text style={S.ownedStar}>★</Text>}
+        <View style={S.spriteFrame}>
+            <Image source={pet.stage1.sprite} style={S.pixelSprite} contentFit="contain" />
         </View>
-        <Text style={[S.heroName, { fontSize: fs(8, 13, isDesktop) }]}>{item.name}</Text>
-        <GlitchButton onPress={onPress} color={item.color} isDesktop={isDesktop} style={{ marginTop: 8 }}>
-            {item.price}
-        </GlitchButton>
-    </Animated.View>
+        <Text style={S.heroName} numberOfLines={1}>{pet.name}</Text>
+        <Text style={S.heroClass} numberOfLines={2}>{pet.lore}</Text>
+        {owned ? (
+            <TouchableOpacity style={[S.buyBtn, equipped && { backgroundColor: '#2a4a2a' }]} onPress={onPress}>
+                <Text style={[S.buyBtnTxt, equipped && { color: C.inkBright }]}>{equipped ? 'EQUIPADO' : 'EQUIPAR'}</Text>
+            </TouchableOpacity>
+        ) : (
+            <TouchableOpacity style={S.buyBtn} onPress={onPress}>
+                <Text style={S.buyBtnStar}>★</Text>
+                <Text style={S.buyBtnTxt}>{pet.cost}</Text>
+            </TouchableOpacity>
+        )}
+    </View>
 );
 
-// ─── Estilos ──────────────────────────────────────────────────────────────────
+const ShopCard = ({ item, onPress }: any) => (
+    <View style={S.heroCard}>
+        <View style={[S.spriteFrame, { borderColor: `${item.color}66` }]}>
+            {item.sprite ? (
+                <Image source={item.sprite} style={S.pixelSprite} contentFit="contain" />
+            ) : (
+                <Text style={{ fontSize: 32, fontFamily: fontFam }}>{item.icon}</Text>
+            )}
+        </View>
+        <Text style={S.heroName} numberOfLines={1}>{item.name}</Text>
+        <TouchableOpacity style={[S.buyBtn, { borderColor: item.color }]} onPress={onPress}>
+            <Text style={[S.buyBtnStar, { color: item.color }]}>★</Text>
+            <Text style={S.buyBtnTxt}>{item.price}</Text>
+        </TouchableOpacity>
+    </View>
+);
+
 const S = StyleSheet.create({
-    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(2, 4, 15, 0.98)', justifyContent: 'center', alignItems: 'center', zIndex: 20000 },
-    grimoireShell: { backgroundColor: C.parchmentMid, borderRadius: 12, overflow: 'hidden', borderWidth: 6, borderColor: C.borderPixel, elevation: 20, position: 'relative' },
-    scanlines: { ...StyleSheet.absoluteFillObject, opacity: 0.05, zIndex: 10 },
-    coverFull: { flex: 1, backgroundColor: '#3E2723' },
-    coverBg: { ...StyleSheet.absoluteFillObject, opacity: 0.4 },
-    coverOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-    coverTitle: { color: C.ink, fontWeight: '900', letterSpacing: 4, textAlign: 'center', marginTop: 24 },
-    coverSub: { color: C.inkDim, fontWeight: '700', letterSpacing: 1, marginTop: 12 },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    grimoireShell: {
+        backgroundColor: C.parchmentMid,
+        borderWidth: 4,
+        borderColor: C.borderPixel,
+        overflow: 'hidden',
+    },
+    scanlines: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.06)',
+    },
+    corner: { position: 'absolute', fontSize: 10, color: C.borderBright, zIndex: 2, fontFamily: fontFam },
+    cornerTL: { top: 6, left: 6 },
+    cornerTR: { top: 6, right: 6 },
+    cornerBL: { bottom: 6, left: 6 },
+    cornerBR: { bottom: 6, right: 6 },
 
-    spine: { height: '100%', backgroundColor: C.parchmentLight, borderRightWidth: 3, borderColor: C.borderPixel, paddingTop: 40, gap: 20, alignItems: 'center' },
-    tabBtn: { width: '80%', height: 50, justifyContent: 'center', alignItems: 'center', backgroundColor: C.parchmentMid, borderWidth: 2, borderColor: C.borderPixel },
-    tabBtnActive: { backgroundColor: '#4a2c14', borderColor: C.borderBright, width: '90%', marginLeft: 10 },
-    tabIcon: { textAlign: 'center' },
-    tabIndicator: { position: 'absolute', right: -2, width: 3, height: '70%', backgroundColor: C.borderBright },
+    spine: {
+        width: 60,
+        borderRightWidth: 3,
+        borderColor: C.borderPixel,
+        backgroundColor: C.parchmentLight,
+        alignItems: 'center',
+        paddingVertical: 20,
+        paddingLeft: 4,
+        zIndex: 3,
+    },
+    tabBtn: {
+        width: 50,
+        height: 60,
+        backgroundColor: C.parchmentMid,
+        borderWidth: 2,
+        borderColor: C.borderPixel,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    tabBtnActive: {
+        backgroundColor: '#4a2c14',
+        borderLeftWidth: 0,
+        borderColor: C.borderBright,
+        width: 54,
+        marginLeft: 4,
+    },
+    tabBtnActiveLine: {
+        position: 'absolute',
+        right: -3,
+        top: '15%',
+        width: 3,
+        height: '70%',
+        backgroundColor: C.borderBright,
+    },
+    tabIcon: {
+        fontSize: 18,
+        color: C.inkDim,
+        fontFamily: fontFam,
+    },
+    tabLabel: {
+        fontSize: 6,
+        color: C.inkDim,
+        marginTop: 4,
+        fontWeight: '900',
+        fontFamily: fontFam,
+    },
 
-    page: { flex: 1, padding: 16, backgroundColor: C.parchmentMid },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 2, borderColor: C.borderPixel },
-    headerTitle: { color: C.inkBright, fontWeight: '900', letterSpacing: 1 },
-    headerSub: { color: C.inkDim, marginTop: 4 },
-    coinsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1a0e04', padding: 6, borderRadius: 4, borderWidth: 1.5, borderColor: C.borderBright },
-    coinsTxt: { color: C.inkBright, fontWeight: '900' },
+    page: {
+        flex: 1,
+        paddingLeft: 12,
+        paddingTop: 12,
+        paddingRight: 12,
+        position: 'relative',
+        zIndex: 1,
+    },
+    pageHeader: {
+        borderBottomWidth: 2,
+        borderBottomColor: C.borderPixel,
+        paddingBottom: 10,
+        marginBottom: 12,
+    },
+    headerDivider: {
+        textAlign: 'center',
+        fontSize: 8,
+        color: C.borderBright,
+        marginTop: 6,
+        letterSpacing: 1,
+        fontFamily: fontFam,
+    },
+    titleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    grimoireTitle: {
+        fontSize: 14,
+        color: C.inkBright,
+        fontWeight: '900',
+        letterSpacing: 0.5,
+        fontFamily: fontFam,
+        textShadowColor: '#000',
+        textShadowOffset: { width: 2, height: 2 },
+        textShadowRadius: 0,
+    },
+    grimoireSub: {
+        fontSize: 8,
+        color: C.inkDim,
+        marginTop: 3,
+        fontWeight: '900',
+        fontFamily: fontFam,
+    },
+    goldCounter: {
+        backgroundColor: '#1a0e04',
+        borderWidth: 2,
+        borderColor: C.borderBright,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    starCoinIcon: {
+        width: 12,
+        height: 12,
+    },
+    goldCounterTxt: {
+        fontSize: 10,
+        color: C.inkBright,
+        fontWeight: '900',
+        fontFamily: fontFam,
+    },
+    sectionLabel: {
+        fontSize: 10,
+        color: C.borderBright,
+        letterSpacing: 2,
+        marginBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: C.borderPixel,
+        paddingBottom: 4,
+        fontWeight: '900',
+        fontFamily: fontFam,
+    },
 
-    sectionLblRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-    sectionLbl: { color: C.borderBright, fontWeight: '900', letterSpacing: 2 },
-    sectionLine: { flex: 1, height: 1, backgroundColor: C.borderPixel },
+    heroGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    heroCard: {
+        width: '48%', // Approx 2 columns
+        backgroundColor: C.bgCard,
+        borderWidth: 2,
+        borderColor: C.borderPixel,
+        padding: 8,
+        marginBottom: 8,
+    },
+    heroCardOwned: {
+        borderColor: C.accentGreen,
+    },
+    ownedStar: {
+        position: 'absolute',
+        top: 3,
+        right: 3,
+        fontSize: 10,
+        color: '#2ecc71',
+        fontFamily: fontFam,
+    },
+    spriteFrame: {
+        width: '100%',
+        aspectRatio: 1,
+        backgroundColor: C.bgFrame,
+        borderWidth: 2,
+        borderColor: C.borderPixel,
+        marginBottom: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    pixelSprite: {
+        width: 48,
+        height: 48,
+    },
+    lockedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.65)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    pxLock: { width: 14, height: 18, alignItems: 'center' },
+    pxLockShackle: { width: 8, height: 8, borderWidth: 3, borderColor: C.inkDim, borderBottomWidth: 0, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+    pxLockBody: { width: 14, height: 10, backgroundColor: C.inkDim, borderWidth: 1 },
 
-    grid: { flexDirection: 'row', flexWrap: 'wrap' },
-    card: { backgroundColor: '#1a0e04', padding: 8, borderWidth: 1.5, borderColor: C.borderPixel, borderRadius: 4, marginBottom: 16 },
-    cardOwned: { borderColor: C.accentGreen },
-    spriteFrame: { width: '100%', aspectRatio: 1, backgroundColor: '#0d0704', borderWidth: 1.5, borderColor: C.borderPixel, marginBottom: 8, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-    pixelSprite: { width: '80%', height: '80%' },
-    lockOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-    heroName: { color: C.ink, fontWeight: '900', marginBottom: 2 },
-    heroClass: { color: C.inkDim, marginBottom: 6 },
-    ownedBanner: { borderTopWidth: 1, borderColor: C.accentGreen, paddingTop: 6, alignItems: 'center' },
-    ownedTxt: { color: '#4ADE80', fontWeight: '900' },
+    heroName: {
+        fontSize: 11,
+        color: C.ink,
+        fontWeight: '900',
+        marginBottom: 2,
+        fontFamily: fontFam,
+    },
+    heroClass: {
+        fontSize: 9,
+        color: C.inkDim,
+        marginBottom: 6,
+        fontWeight: '800',
+        fontFamily: fontFam,
+    },
+    buyBtn: {
+        width: '100%',
+        backgroundColor: '#3d1a0a',
+        borderWidth: 2,
+        borderColor: C.borderBright,
+        paddingVertical: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+    },
+    buyBtnStar: {
+        color: C.inkBright,
+        fontSize: 10,
+        fontFamily: fontFam,
+    },
+    buyBtnTxt: {
+        color: C.inkBright,
+        fontSize: 10,
+        fontWeight: '900',
+        fontFamily: fontFam,
+    },
+    ownedBanner: {
+        borderTopWidth: 1,
+        borderTopColor: C.accentGreen,
+        paddingTop: 4,
+        alignItems: 'center',
+    },
+    ownedBannerTxt: {
+        fontSize: 9,
+        color: '#2ecc71',
+        fontWeight: '900',
+        letterSpacing: 1,
+        fontFamily: fontFam,
+    },
 
-    closeBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.parchmentMid, borderTopWidth: 2, borderColor: C.borderPixel, justifyContent: 'center', alignItems: 'center' },
-    closeBarTxt: { color: C.inkDim, fontWeight: '900', letterSpacing: 2 },
-
-    // Estilos Portal Avanzado
-    pWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    pc1: { borderRadius: 1000, height: 260, width: 260, borderWidth: 2, borderColor: '#e7b439', justifyContent: 'center', alignItems: 'center' },
-    pc2: { borderRadius: 1000, height: 240, width: 240, borderWidth: 1.5, borderColor: '#ffb61e', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
-    pc3: { borderRadius: 1000, height: 220, width: 220, borderWidth: 1, borderColor: '#ffb61e', justifyContent: 'center', alignItems: 'center' },
-    pr1: { height: 140, width: 140, borderWidth: 1, borderColor: '#ffb61e', borderStyle: 'dotted', justifyContent: 'center', alignItems: 'center' },
-    pc4: { borderRadius: 1000, height: 140, width: 140, borderWidth: 1, borderColor: '#ffb61e', borderStyle: 'dotted', justifyContent: 'center', alignItems: 'center' },
-    pr2: { height: 90, width: 90, borderWidth: 1, borderColor: '#ffb61e', justifyContent: 'center', alignItems: 'center' },
-    pr3: { height: 90, width: 90, borderWidth: 1, borderColor: '#ffb61e', transform: [{ rotate: '45deg' }] },
-    pc5: { position: 'absolute', borderRadius: 1000, height: 80, width: 80, borderWidth: 1, borderColor: '#ffb61e' },
-    pc6: { position: 'absolute', borderRadius: 1000, height: 60, width: 60, borderWidth: 3, borderColor: '#ffb61e' },
-    pTxt: { color: C.inkBright, fontSize: 11, fontWeight: '900', marginTop: 50, letterSpacing: 3 },
-    
-    // Anillos Cinéticos
-    ringLoader: { position: 'absolute', width: 340, height: 340, justifyContent: 'center', alignItems: 'center' },
-    pRing: { position: 'absolute', width: 120, height: 120, borderRadius: 1000, borderWidth: 2, borderBottomWidth: 0, borderRightWidth: 0 },
-
-    // Botón Glitch
-    glitchContainer: { height: 44, justifyContent: 'center' },
-    glitchShell: { flex: 1, paddingHorizontal: 20, justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' },
-    glitchTxt: { fontWeight: '900', letterSpacing: 1, zIndex: 5 },
-    gCorner: { position: 'absolute', width: 14, height: 14, transform: [{ rotate: '45deg' }], zIndex: 10 },
-    gTL: { top: -7, left: -7 }, gTR: { top: -7, right: -7 },
-    gBL: { bottom: -7, left: -7 }, gBR: { bottom: -7, right: -7 },
+    closeBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: C.parchmentMid,
+        borderTopWidth: 2,
+        borderColor: C.borderPixel,
+        padding: 12,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+    },
+    closeBarText: {
+        fontSize: 10,
+        color: C.inkDim,
+        fontWeight: '900',
+        letterSpacing: 2,
+        fontFamily: fontFam,
+    },
+    closeBarSign: {
+        fontSize: 12,
+        color: C.borderBright,
+        fontFamily: fontFam,
+    }
 });
