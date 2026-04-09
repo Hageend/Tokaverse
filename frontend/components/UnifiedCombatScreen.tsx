@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, ScrollView, useWindowDimensions,
+  View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, ScrollView, useWindowDimensions, Image as RNImage,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useCrossPlatformAudio } from '../hooks/useCrossPlatformAudio';
@@ -72,7 +72,7 @@ const StatBar = React.memo(({ current, max, color, label, showText = true }: {
 }) => {
   const safeCur = isNaN(current) ? 0 : current;
   const safeMax = isNaN(max) || max <= 0 ? 100 : max;
-  const pct     = Math.max(0, Math.min(1, safeCur / safeMax));
+  const pct = Math.max(0, Math.min(1, safeCur / safeMax));
 
   const opacity = useSharedValue(1);
   useEffect(() => {
@@ -99,8 +99,8 @@ const StatBar = React.memo(({ current, max, color, label, showText = true }: {
   );
 });
 
-const AnimatedSprite = React.memo(({ spriteUrl, onHit, sizeScale = 1, shakeAnim }: { 
-  spriteUrl: any; onHit: boolean; sizeScale?: number; shakeAnim?: SharedValue<number> 
+const AnimatedSprite = React.memo(({ spriteUrl, onHit, sizeScale = 1, shakeAnim, hitGif }: {
+  spriteUrl: any; onHit: boolean; sizeScale?: number; shakeAnim?: SharedValue<number>; hitGif?: any;
 }) => {
   const sc = useSharedValue(1);
   useEffect(() => {
@@ -109,16 +109,23 @@ const AnimatedSprite = React.memo(({ spriteUrl, onHit, sizeScale = 1, shakeAnim 
     }
   }, [onHit, sc]);
 
-  const animated = useAnimatedStyle(() => ({ 
+  const animated = useAnimatedStyle(() => ({
     transform: [
-      { translateX: shakeAnim?.value ?? 0 }, 
+      { translateX: shakeAnim?.value ?? 0 },
       { scale: sc.value * sizeScale }
-    ] 
+    ]
   }));
-  
+
   return (
-    <Animated.View style={animated}>
-      <Image source={typeof spriteUrl === 'number' ? spriteUrl : { uri: spriteUrl }} style={{ width: 120, height: 120 }} contentFit="contain" />
+    <Animated.View style={[animated, { justifyContent: 'center', alignItems: 'center' }]}>
+      <Image source={typeof spriteUrl === 'string' ? { uri: spriteUrl } : spriteUrl} style={{ width: 120, height: 120 }} contentFit="contain" />
+      {hitGif && (
+        <RNImage
+          source={hitGif}
+          style={{ position: 'absolute', width: 220, height: 220, zIndex: 10 }}
+          resizeMode="contain"
+        />
+      )}
     </Animated.View>
   );
 });
@@ -230,6 +237,8 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const [isHeroHit, setHeroHit] = useState(false);
   const [showBag, setShowBag] = useState(false);
   const [animatingVictory, setAnimatingVictory] = useState(false);
+  const [heroHitGif, setHeroHitGif] = useState<any>(null);
+  const [enemyHitGif, setEnemyHitGif] = useState<any>(null);
 
   const inventory = useInventoryStore(s => s.items);
   const consumables = useMemo(() => inventory.filter(i => i.type === 'consumable'), [inventory]);
@@ -239,7 +248,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   const [lootData, setLootData] = useState<LootDropDisplay | null>(null);
 
   const combatPlayer = useCrossPlatformAudio(COMBAT_TRACKS[Math.floor(Math.random() * 6)]);
-  
+
   useEffect(() => {
     combatPlayer.setVolume(vol);
   }, [vol]);
@@ -252,16 +261,23 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
     if (state.phase !== 'player_turn' || busyRef.current || busy) return;
     busyRef.current = true; setBusy(true);
     if (a.type === 'ATTACK' || a.type === 'SKILL' || a.type === 'FUSION') setHeroAttacking(true);
-    
+
     try {
       const next = TurnManager.executePlayerAction(state, a);
       const log = next.log[next.log.length - 1];
-      
+
       if (log?.damage && (log.actor === 'player' || log.action === 'FINANCIAL_ACTION' || a.type === 'SKILL')) {
         addDamageEvent(log.damage, 'enemy', log.isCritical ? 'critical' : (log.isWeakness ? 'weakness' : 'normal'));
         triggerShake('enemy');
+        setEnemyHitGif(require('../assets/animation/slash fx levels GIF.gif'));
+        setTimeout(() => setEnemyHitGif(null), 800);
       }
-      
+
+      if (a.type === 'DEFEND' || log?.action === 'DEFEND') {
+        setHeroHitGif(require('../assets/animation/shield.gif'));
+        setTimeout(() => setHeroHitGif(null), 800);
+      }
+
       if (a.type === 'USE_ITEM') {
         useInventoryStore.getState().removeItem(a.itemId);
         setShowBag(false);
@@ -273,11 +289,11 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
         flash.value = withSequence(withTiming(1, { duration: 50 }), withTiming(0, { duration: 300 }));
         setAnimatingVictory(true);
         const isMob = next.boss.skills.length <= 2;
-        const bossIdRaw = next.boss.id?.replace('boss_','') || 'toka_despensa';
+        const bossIdRaw = next.boss.id?.replace('boss_', '') || 'toka_despensa';
         const drop = BOSS_DROPS[bossIdRaw]?.guaranteed ?? selectRandomDrop(bossIdRaw);
         const xp = isMob ? ((props.opponent as any).xpReward || 80) : 500;
         const starCoins = isMob ? 25 : 150;
-        
+
         let finalItems: (BossDropItem & { id: string })[] = [];
         let invFull = false;
         if (drop) {
@@ -297,7 +313,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           bossName: next.boss.name,
         });
         setShowLootModal(true);
-        setTimeout(() => props.onVictory?.(next.boss), 5000); 
+        setTimeout(() => props.onVictory?.(next.boss), 5000);
       }
     } finally { busyRef.current = false; setBusy(false); }
   };
@@ -306,12 +322,17 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
     if (state.phase !== 'boss_turn') return;
     const t = setTimeout(() => {
       const next = TurnManager.executeBossTurn(state);
-      next.log.slice(state.log.length).forEach((e: any) => { 
-        if (e.damage) {
-          addDamageEvent(e.damage, 'hero', 'normal'); 
+      next.log.slice(state.log.length).forEach((e: any) => {
+        if (e.damage && e.action !== 'DEFEND' && e.action !== 'defend') {
+          addDamageEvent(e.damage, 'hero', 'normal');
           triggerShake('hero');
           setHeroHit(true);
-          setTimeout(() => setHeroHit(false), 500);
+          setHeroHitGif(require('../assets/animation/Splosion GIF.gif'));
+          setTimeout(() => { setHeroHit(false); setHeroHitGif(null); }, 800);
+        }
+        if (e.action === 'DEFEND' || e.action === 'defend' || (e.message && e.message.includes('se defiende'))) {
+          setEnemyHitGif(require('../assets/animation/shield.gif'));
+          setTimeout(() => setEnemyHitGif(null), 800);
         }
       });
       setState(next);
@@ -387,7 +408,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
   return (
     <View style={styles.root}>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFF', zIndex: 99 }, flashAnim]} />
-      
+
       {/* HUD & TOP BAR */}
       <View style={styles.topBar}>
         <View style={styles.vol}><TouchableOpacity onPress={() => setVol(v => Math.max(0, v - 0.1))}><Ionicons name="volume-low" color="#FFF" size={14} /></TouchableOpacity><Text style={styles.volT}>{Math.round(vol * 100)}%</Text><TouchableOpacity onPress={() => setVol(v => Math.min(1, v + 0.1))}><Ionicons name="volume-high" color="#FFF" size={14} /></TouchableOpacity></View>
@@ -408,7 +429,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           {/* LEFT: ENEMY */}
           <View style={styles.sideCol}>
             <View style={[styles.box, { borderColor: bpc + '44', flex: 1 }]}>
-               <View style={styles.row}>
+              <View style={styles.row}>
                 <Text style={[styles.name, { color: bpc }]}>{state.boss.name}</Text>
                 {state.boss.debtAmount > 0 && <View style={[styles.badge, { backgroundColor: bpc + '15', borderColor: bpc + '55' }]}><Text style={[styles.badT, { color: bpc }]}>FASE {state.boss.phase}</Text></View>}
               </View>
@@ -416,7 +437,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
               <View style={styles.atbTrack}><View style={[styles.atbFill, { width: state.phase === 'boss_turn' ? '100%' : '30%', backgroundColor: bpc }]} /></View>
               <StatusChips effects={state.boss.statusEffects} />
               <View style={[styles.center, { marginTop: 40 }]}>
-                <AnimatedSprite spriteUrl={state.boss.sprite} onHit={state.phase === 'boss_turn'} sizeScale={1.8} shakeAnim={enemyShake} />
+                <AnimatedSprite spriteUrl={state.boss.sprite} onHit={state.phase === 'boss_turn'} sizeScale={1.8} shakeAnim={enemyShake} hitGif={enemyHitGif} />
               </View>
             </View>
           </View>
@@ -425,8 +446,8 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           <View style={styles.centerCol}>
             {state.phase === 'player_turn' && state.telegraphMsg && (
               <Animated.View entering={FadeInUp} style={styles.telegraphBanner}>
-                 <Ionicons name="warning" size={14} color="#EF4444" />
-                 <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
+                <Ionicons name="warning" size={14} color="#EF4444" />
+                <Text style={styles.telegraphT}>PRÓXIMO: {state.telegraphMsg.toUpperCase()}</Text>
               </Animated.View>
             )}
             <View style={[styles.log, { height: 120, marginBottom: 16 }]}>
@@ -458,17 +479,18 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           {/* RIGHT: PLAYER */}
           <View style={styles.sideCol}>
             <View style={[styles.box, { flex: 1 }]}>
-               <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                <CharacterAvatar 
-                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')} 
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <CharacterAvatar
+                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')}
                   isAttacking={isHeroAttacking}
                   isTakingDamage={isHeroHit}
+                  hitGifUrl={heroHitGif}
                 />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={styles.pName}>{state.player.name}</Text>
                 <View style={styles.comboRow}>
-                  {[1,2,3,4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
+                  {[1, 2, 3, 4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
                 </View>
               </View>
               <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
@@ -496,7 +518,7 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
             <View style={styles.atbTrack}><View style={[styles.atbFill, { width: state.phase === 'boss_turn' ? '100%' : '30%', backgroundColor: bpc }]} /></View>
             <StatusChips effects={state.boss.statusEffects} />
             <View style={styles.center}>
-              <AnimatedSprite spriteUrl={state.boss.sprite} onHit={state.phase === 'boss_turn'} sizeScale={1.2} shakeAnim={enemyShake} />
+              <AnimatedSprite spriteUrl={state.boss.sprite} onHit={state.phase === 'boss_turn'} sizeScale={1.2} shakeAnim={enemyShake} hitGif={enemyHitGif} />
             </View>
           </View>
 
@@ -513,17 +535,18 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
           <View style={styles.box}>
             <View style={styles.row}>
               <View style={{ alignItems: 'center' }}>
-                <CharacterAvatar 
-                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')} 
+                <CharacterAvatar
+                  spriteUrl={props.heroSprite || require('../assets/images/chars/char_rogue.png')}
                   isAttacking={isHeroAttacking}
                   isTakingDamage={isHeroHit}
+                  hitGifUrl={heroHitGif}
                 />
               </View>
               <View style={{ flex: 1, marginLeft: 15 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={styles.pName}>{state.player.name}</Text>
                   <View style={styles.comboRow}>
-                    {[1,2,3,4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
+                    {[1, 2, 3, 4].map(i => <View key={i} style={[styles.comboDot, state.comboCounter >= i && styles.comboDotActive]} />)}
                   </View>
                 </View>
                 <StatBar current={state.player.hp} max={state.player.maxHp} color="#22c55e" label="HP" />
@@ -574,9 +597,9 @@ export default function UnifiedCombatScreen(props: UnifiedCombatProps) {
               ) : (
                 <View style={uiStyles.bagGrid}>
                   {consumables.map(item => (
-                    <TouchableOpacity 
-                      key={item.id} 
-                      style={uiStyles.bagItem} 
+                    <TouchableOpacity
+                      key={item.id}
+                      style={uiStyles.bagItem}
                       onPress={() => handleAction({ type: 'USE_ITEM', itemId: item.id, hpHeal: item.stats?.hp, manaHeal: item.stats?.mana })}
                     >
                       <Text style={uiStyles.bagItemIcon}>{item.icon}</Text>
@@ -624,7 +647,7 @@ const styles = StyleSheet.create({
   },
   telegraphT: { color: '#ef4444', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   atbTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 2, marginTop: 4, overflow: 'hidden' },
-  atbFill:  { height: '100%', borderRadius: 2 },
+  atbFill: { height: '100%', borderRadius: 2 },
   comboRow: { flexDirection: 'row', gap: 4 },
   comboDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   comboDotActive: { backgroundColor: '#FFD700', borderColor: '#DAA520' },
