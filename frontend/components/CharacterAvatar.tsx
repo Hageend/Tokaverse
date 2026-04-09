@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
-  withTiming, 
-  Easing, 
+import { View, StyleSheet, Platform, Image as RNImage } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
   withSequence,
   withSpring
 } from 'react-native-reanimated';
@@ -15,9 +15,10 @@ interface CharacterAvatarProps {
   spriteUrl: string | number;   // string = URL, number = require('../assets/...')
   isTakingDamage?: boolean;
   isAttacking?: boolean;
+  hitGifUrl?: any;
 }
 
-export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: CharacterAvatarProps) {
+export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking, hitGifUrl }: CharacterAvatarProps) {
   const floatAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(1);
   const scaleAnim = useSharedValue(1);
@@ -27,7 +28,7 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
     // Animación Idle Continua
     floatAnim.value = withRepeat(
       withTiming(6, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-      -1, 
+      -1,
       true
     );
   }, []);
@@ -81,6 +82,13 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
             style={[styles.sprite, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
             contentFit="contain"
             cachePolicy="memory-disk"
+          />
+        ) : null}
+        {hitGifUrl ? (
+          <RNImage
+            source={hitGifUrl}
+            style={[{ position: 'absolute', width: '160%', height: '160%', zIndex: 10 }, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
+            resizeMode="contain"
           />
         ) : null}
       </Animated.View>
