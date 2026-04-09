@@ -5,8 +5,8 @@ import {
   Pressable,
   StyleSheet,
   Platform,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -45,20 +45,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'League',
     icon: (color, size) => (
       <Ionicons name="trophy-outline" size={size} color={color} />
-    ),
-  },
-  {
-    key: 'spins',
-    label: 'Spins',
-    icon: (color, size) => (
-      <MaterialCommunityIcons name="dice-multiple-outline" size={size} color={color} />
-    ),
-  },
-  {
-    key: 'wallet',
-    label: 'Wallet',
-    icon: (color, size) => (
-      <Ionicons name="wallet-outline" size={size} color={color} />
     ),
   },
 ];
@@ -132,7 +118,7 @@ export function WebTopBar({ activeTab, onTabPress, title = 'TOKAVERSE' }: WebTop
             <Image
               source={require('../../assets/images/iconToka.png')}
               style={{ width: '100%', height: '100%', borderRadius: 10 }}
-              resizeMode="cover"
+              contentFit="cover"
             />
           </View>
           <Text style={styles.logoText}>{title}</Text>
@@ -201,7 +187,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 1000,
+    zIndex: 20000,
     backgroundColor: 'transparent',
   },
   bar: {
