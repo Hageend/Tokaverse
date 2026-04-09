@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Image as RNImage } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,9 +15,10 @@ interface CharacterAvatarProps {
   spriteUrl: string | number;   // string = URL, number = require('../assets/...')
   isTakingDamage?: boolean;
   isAttacking?: boolean;
+  hitGifUrl?: any;
 }
 
-export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: CharacterAvatarProps) {
+export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking, hitGifUrl }: CharacterAvatarProps) {
   const floatAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(1);
   const scaleAnim = useSharedValue(1);
@@ -30,7 +31,7 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
       -1,
       true
     );
-  }, [floatAnim]);
+  }, []);
 
   useEffect(() => {
     // Reacciona a Daño: Parpadeo Rojo y vibración
@@ -48,7 +49,7 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
         withTiming(0, { duration: 50 })
       );
     }
-  }, [isTakingDamage, opacityAnim, translateX]);
+  }, [isTakingDamage]);
 
   useEffect(() => {
     // Reacciona a Ataque: Avance rápido frontal y regreso
@@ -58,7 +59,7 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
         withSpring(1, { damping: 10 })
       );
     }
-  }, [isAttacking, scaleAnim]);
+  }, [isAttacking]);
 
   const animatedStyles = useAnimatedStyle(() => {
     return {
@@ -81,6 +82,13 @@ export function CharacterAvatar({ spriteUrl, isTakingDamage, isAttacking }: Char
             style={[styles.sprite, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
             contentFit="contain"
             cachePolicy="memory-disk"
+          />
+        ) : null}
+        {hitGifUrl ? (
+          <RNImage
+            source={hitGifUrl}
+            style={[{ position: 'absolute', width: '160%', height: '160%', zIndex: 10 }, Platform.OS === 'web' && { imageRendering: 'pixelated' } as any]}
+            resizeMode="contain"
           />
         ) : null}
       </Animated.View>

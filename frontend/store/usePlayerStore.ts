@@ -14,12 +14,18 @@ interface PlayerState {
   charClass:   'warrior' | 'archer' | 'mage' | 'rogue' | 'banker' | 'kitsune' | 'thief' | 'knight' | 'magedark' | 'dog' | 'cat' | 'fox';
   starCoins:   number;         // Moneda de la tienda (Estrella)
   unlockedClasses: string[];   // Clases desbloqueadas
+  equippedPet: string | null;  // ID de la mascota actual
+  ownedPets:   string[];       // IDs de las mascotas desbloqueadas
+  unlockedRecipes: string[];   // IDs de recetas de fusión ocultas
   
   // Acciones
   addXp:       (amount: number) => { leveledUp: boolean; newLevel: number };
   addStarCoins:(amount: number) => void;
   unlockClass: (cls: string) => boolean;
   setCharClass: (cls: any) => void;
+  unlockPet:   (petId: string) => boolean;
+  setEquippedPet: (petId: string | null) => void;
+  unlockRecipe: (recipeId: string) => boolean;
   resetPlayer:  () => void;
 }
 
@@ -35,8 +41,11 @@ export const usePlayerStore = create<PlayerState>()(
       baseMaxHp:   100,
       baseMaxMana: 60,
       charClass:   'warrior', // Default
-      starCoins:   1000,      // 1000 Monedas iniciales
+      starCoins:   100,       // Tweak a economía rebalanceada (100 base)
       unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief'], // 3 M / 3 F default
+      equippedPet: null,
+      ownedPets:   [],
+      unlockedRecipes: [],
 
       addXp: (amount: number) => {
         const s = get();
@@ -82,9 +91,26 @@ export const usePlayerStore = create<PlayerState>()(
 
       setCharClass: (cls) => set({ charClass: cls }),
 
+      unlockPet: (petId) => {
+        const { ownedPets } = get();
+        if (ownedPets.includes(petId)) return false;
+        set(s => ({ ownedPets: [...s.ownedPets, petId] }));
+        return true;
+      },
+
+      setEquippedPet: (petId) => set({ equippedPet: petId }),
+
+      unlockRecipe: (recipeId) => {
+        const { unlockedRecipes } = get();
+        if (unlockedRecipes.includes(recipeId)) return false;
+        set(s => ({ unlockedRecipes: [...s.unlockedRecipes, recipeId] }));
+        return true;
+      },
+
       resetPlayer: () => set({
         level: 1, xp: 0, nextLevelXp: XP_BASE, baseMaxHp: 100, baseMaxMana: 60, charClass: 'warrior',
-        starCoins: 1000, unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief']
+        starCoins: 100, unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief'],
+        equippedPet: null, ownedPets: [], unlockedRecipes: []
       }),
     }),
     {

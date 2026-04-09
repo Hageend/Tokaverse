@@ -101,16 +101,16 @@ const pcStyles = StyleSheet.create({
 export function ShopModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<'hero' | 'item' | 'card'>('hero');
-  const { shards, unlockedClasses, unlockClass, addShards } = usePlayerStore();
+  const { starCoins, unlockedClasses, unlockClass, addStarCoins } = usePlayerStore();
   const { addItem } = useInventoryStore();
 
   const handleBuy = (item: ShopItem) => {
-    if (shards < item.price) {
-      Alert.alert('Saldo Insuficiente', '¡Derrota más jefes para obtener Shards! 💎');
+    if (starCoins < item.price) {
+      Alert.alert('Saldo Insuficiente', '¡Aventúrate para obtener StarCoins! 💎');
       return;
     }
 
-    addShards(-item.price);
+    addStarCoins(-item.price);
     if (item.type === 'hero') {
       unlockClass(item.id);
     } else {
@@ -149,7 +149,7 @@ export function ShopModal({ visible, onClose }: { visible: boolean; onClose: () 
             </View>
             <View style={styles.currency}>
               <MaterialCommunityIcons name="diamond-stone" size={18} color="#7b5ea7" />
-              <Text style={styles.currencyNum}>{shards}</Text>
+              <Text style={styles.currencyNum}>{starCoins}</Text>
             </View>
           </View>
 

@@ -3,6 +3,7 @@
 
 import { FusionResult, PlayerCard } from '../types/fusion'
 import { Element } from '../types/elements'
+import { usePlayerStore } from '../store/usePlayerStore'
 
 // ─── Inventario demo de cartas (usado hasta tener backend de inventario) ──────
 export const DEMO_CARDS: PlayerCard[] = [
@@ -82,6 +83,7 @@ const FUSION_RECIPES: FusionRecipe[] = [
       id: 'f005', name: '❄️⚡ Transferencia Congelada',
       description: 'Daño Hielo + efecto Rayo simultáneo — combo elemental explosivo',
       skillId: 'frozen_transfer', element: 'ice', duration: 2,
+      tier: 'duo',
     },
   },
   {
@@ -91,8 +93,30 @@ const FUSION_RECIPES: FusionRecipe[] = [
       description: 'Sin costo de mana en tu próximo skill — comprobación instantánea',
       skillId: 'no_mana_skill', element: 'thunder', duration: 2,
       specialEffect: 'no_mana_cost',
+      tier: 'duo',
     },
   },
+  {
+    cards: ['c001', 'c001', 'c001'], // Trinity
+    result: {
+      id: 't001', name: '❄️ Cero Absoluto (TRINITY)',
+      description: 'Escudo absoluto por 3 turnos y daño de hielo.',
+      skillId: 'trinity_shield', element: 'ice', duration: 3,
+      specialEffect: 'auto_block',
+      tier: 'trinity',
+    }
+  },
+  {
+    cards: ['r001', 'r002', 'e001'], // 3 diferentes elementos
+    result: {
+      id: 'h001', name: '🌿 Alquimia Sinergia de Vida',
+      description: 'Receta Secreta! Regenera 15% HP en cada turno por 3 turnos seguidos.',
+      skillId: 'secret_regen', element: 'earth', duration: 3,
+      specialEffect: 'regen_hp',
+      isHidden: true,
+      tier: 'hidden'
+    }
+  }
 ]
 
 export const PASSIVE_BONUS_INFO: Record<string, string> = {
@@ -107,6 +131,7 @@ export class FusionEngine {
   // ── Detectar fusiones posibles con cartas equipadas ───────────────────────
   static detectFusions(equippedCardIds: string[]): FusionResult[] {
     const available: FusionResult[] = []
+    const { unlockedRecipes } = usePlayerStore.getState()
 
     for (const recipe of FUSION_RECIPES) {
       const remaining = [...equippedCardIds]
@@ -118,7 +143,21 @@ export class FusionEngine {
         remaining.splice(idx, 1)
       }
 
-      if (match) available.push(recipe.result)
+      if (match) {
+        // Enmascarar recetas ocultas no descubiertas
+        if (recipe.result.isHidden && !unlockedRecipes.includes(recipe.result.id)) {
+           available.push({
+             ...recipe.result,
+             name: '??? Receta Secreta',
+             description: 'Descubre los detalles de esta combinación al iniciar el combate.',
+             element: 'dark', // Esconde elemento
+             specialEffect: undefined,
+             statBoost: undefined,
+           })
+        } else {
+           available.push(recipe.result)
+        }
+      }
     }
 
     return available
@@ -166,8 +205,17 @@ export class FusionEngine {
       f004: { icon: '🏢', color: '#F59E0B' },
       f005: { icon: '❄️', color: '#00D4FF' },
       f006: { icon: '📑', color: '#8B5CF6' },
+      t001: { icon: '🔱', color: '#E879F9' },
+      h001: { icon: '🌿', color: '#10B981' }, // Si no está descubierta, se sobreescribe abajo
     }
     const info = rarityMap[fusion.id] ?? { icon: '⚡', color: '#FFFFFF' }
+    
+    // Si la fusión oculta no está descubierta y su nombre dice '??? Receta Secreta'
+    if (fusion.name.includes('???')) {
+        info.color = '#9CA3AF'
+        info.icon = '🗝️'
+    }
+
     return {
       ...info,
       badgeText: fusion.duration === 1 ? '1 turno' : `${fusion.duration} turnos`,
