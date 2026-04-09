@@ -10,6 +10,7 @@ import { ProgressMap, MapMission } from '../../components/league/ProgressMap';
 import { MapNode, WorldZone, ISLANDS_DB, ISLANDS_DATA, Island } from '../../data/islands';
 import { LeagueJoinModal } from '../../components/league/LeagueJoinModal';
 import { DetailedIslandMap } from '../../components/league/DetailedIslandMap';
+import { UnifiedLeagueMap } from '../../components/league/UnifiedLeagueMap';
 import { ProceduralContent } from '../../utils/ProceduralContent';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { WeatherBanner } from '../../components/ui/WeatherBanner';
@@ -23,6 +24,22 @@ import { CLASS_FIGHTERS } from '../../data/classSkills';
 import type { ClassKey } from '../../data/classSkills';
 import { Boss, Fighter } from '../../types/combat';
 import type { PlayerCard } from '../../types/fusion';
+
+// -- Minijuegos Financieros (Puzzles) --
+import { DebtSorterPuzzle } from '../../components/puzzles/DebtSorterPuzzle';
+import { TransactionTagger } from '../../components/puzzles/TransactionTagger';
+import { InvoiceScanner } from '../../components/puzzles/InvoiceScanner';
+import { ChangeCounter } from '../../components/puzzles/ChangeCounter';
+import { InterestCalculator } from '../../components/puzzles/InterestCalculator';
+import { SavingsGoal } from '../../components/puzzles/SavingsGoal';
+import { CardMatchFinance } from '../../components/puzzles/CardMatchFinance';
+import { TransactionMemory } from '../../components/puzzles/TransactionMemory';
+import { DebtSnowball } from '../../components/puzzles/DebtSnowball';
+import { PortfolioBuilder } from '../../components/puzzles/PortfolioBuilder';
+import { CrisisManager } from '../../components/puzzles/CrisisManager';
+import { PaymentTiming } from '../../components/puzzles/PaymentTiming';
+import { BubbleBurst } from '../../components/puzzles/BubbleBurst';
+import { ComboChain } from '../../components/puzzles/ComboChain';
 
 
 // ─── ESTILOS CONSOLIDADOS ────────────────────────────────────────────────────
@@ -598,55 +615,78 @@ const S = StyleSheet.create({
     marginBottom: 6,
     fontWeight: '600',
   },
-  // -- Island Navigation Grid --
-  islandGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-    marginTop: 12,
+  // -- Unified Map HUD Overlay --
+  hudOverlay: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    height: 180,
+  },
+  hudScroll: {
+    paddingHorizontal: 16,
+  },
+  // -- Island Selection Design --
+  selectionContainer: {
+    marginVertical: 20,
+    paddingHorizontal: 16,
   },
   islandCard: {
-    width: '48%',
-    backgroundColor: '#1a2234',
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  islandMiniImg: {
+    height: 180,
     width: '100%',
-    aspectRatio: 16 / 10,   // ratio fijo para que se vea completa en web y móvil
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a2e',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  islandCardContent: {
-    padding: 12,
+  cardImg: {
+    width: '100%',
+    height: '100%',
   },
-  islandCardName: {
+  cardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    padding: 24,
+    justifyContent: 'space-between',
+  },
+  cardInfo: {
+    gap: 4,
+  },
+  cardName: {
     color: '#fff',
+    fontSize: 24,
     fontWeight: '900',
-    fontSize: 13,
-    marginBottom: 8,
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
   },
-  islandProgressRow: {
+  cardTier: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  exploreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  miniProgressBar: {
-    flex: 1,
-    height: 5,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  miniProgressFill: {
-    height: '100%',
-    backgroundColor: Colors.accent,
-    borderRadius: 3,
-  },
-  islandProgressTxt: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 10,
-    fontWeight: '800',
+  exploreBtnTxt: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
   },
 });
 
@@ -733,6 +773,7 @@ export default function LeagueScreen() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedLeague, setExpandedLeague] = useState<string | null>(null);
+  const [activePuzzle, setActivePuzzle] = useState<{ type: string; visible: boolean } | null>(null);
   
   const [timeRemaining, setTimeRemaining] = useState<Record<string, string>>({});
   const confettiRef = useRef<any>(null);
@@ -781,6 +822,22 @@ export default function LeagueScreen() {
     }
   }, [userProfile?.level]);
 
+  // Determinar la liga e isla actual para el Mapa Unificado
+  const currentUserLeague = leagues.find(l => l.users.includes(USER_ID));
+  const currentTier = currentUserLeague?.tier ?? 'cobre';
+  const currentIsland = ISLANDS_DATA.find(i => i.tier === currentTier) || ISLANDS_DATA[0];
+
+  const handleNodePress = (node: MapNode) => {
+    if (node.type === 'boss') {
+      handleBossFight(node);
+    } else if (node.type === 'puzzle') {
+       // Aquí se dispararía el modal de puzzle
+       Alert.alert('¡Puzzle!', `Iniciando desafío: ${node.label}`);
+    } else {
+       Alert.alert('Exploración', `Has llegado a: ${node.label}`);
+    }
+  };
+
   const handleBossFight = (node: MapNode) => {
     if (!node.boss) return;
     const boss = BossEngine.generateFromDebt({ 
@@ -802,6 +859,33 @@ export default function LeagueScreen() {
     setInCombat(true);
   };
 
+
+  const renderIslandSelection = () => {
+    if (!currentUserLeague) return null; // No mostrar nada si no se ha unido a la liga
+    
+    return (
+      <View style={S.selectionContainer}>
+        <Text style={S.sectionTitle}>🗺️ ISLA ACTUAL</Text>
+        <TouchableOpacity 
+          style={S.islandCard}
+          activeOpacity={0.8}
+          onPress={() => setSelectedIsland(currentIsland)}
+        >
+          <Image source={currentIsland.miniImage} style={S.cardImg} contentFit="cover" />
+          <View style={S.cardOverlay}>
+            <View style={S.cardInfo}>
+              <Text style={S.cardName}>{currentIsland.name.toUpperCase()}</Text>
+              <Text style={S.cardTier}>{currentTier.toUpperCase()} TIER</Text>
+            </View>
+            <View style={S.exploreBtn}>
+               <Text style={S.exploreBtnTxt}>EXPLORAR MAPA</Text>
+               <Ionicons name="compass" size={18} color={Colors.accent} />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const handleNetworkError = (err: any) => {
     console.error('Network Error:', err);
@@ -1130,37 +1214,7 @@ export default function LeagueScreen() {
     </View>
   );
 
-  const renderProgressMap = () => (
-    <View style={{ marginTop: 24, marginBottom: 20 }}>
-      <Text style={S.sectionTitle}>🗺️ Mapa de Progreso</Text>
-      <Text style={S.sectionSub}>Selecciona una isla para ver el mapa detallado</Text>
-      
-      <View style={S.islandGrid}>
-        {ISLANDS_DATA.map((island) => {
-          const progress = (island.completedMissions / island.totalMissions) * 100;
-          return (
-            <TouchableOpacity 
-              key={island.id} 
-              style={S.islandCard}
-              onPress={() => setSelectedIsland(island)}
-              activeOpacity={0.8}
-            >
-              <Image source={island.miniImage} style={S.islandMiniImg} contentFit="cover" />
-              <View style={S.islandCardContent}>
-                <Text style={S.islandCardName}>{island.name}</Text>
-                <View style={S.islandProgressRow}>
-                  <View style={S.miniProgressBar}>
-                    <View style={[S.miniProgressFill, { width: `${progress}%` }]} />
-                  </View>
-                  <Text style={S.islandProgressTxt}>{island.completedMissions}/{island.totalMissions}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
+
 
   const renderLeagues = () => (
     <>
@@ -1310,22 +1364,51 @@ export default function LeagueScreen() {
         island={selectedIsland}
         visible={selectedIsland !== null}
         onClose={() => setSelectedIsland(null)}
-        onBossFight={(node) => {
-          if (!node.boss) return;
-          setSelectedIsland(null);
-          const boss = BossEngine.generateFromDebt({
-            id: `island_boss_${node.id}`,
-            type: node.boss.bossType as any,
-            amount: node.boss.hp * 10,
-            daysOverdue: 10,
-            interestRate: 15,
-          });
-          const fighter = CLASS_FIGHTERS[charClass as ClassKey] ?? CLASS_FIGHTERS.warrior;
-          setMapCombatBoss(boss);
-          setMapCombatFighter(fighter);
-          setInMapCombat(true);
+        onNodePress={(node) => {
+          if (node.type === 'boss') {
+            handleBossFight(node);
+          } else if (node.type === 'puzzle') {
+            if (node.puzzleType) {
+              setActivePuzzle({ type: node.puzzleType, visible: true });
+            } else {
+              Alert.alert('¡Puzzle!', `Iniciando desafío: ${node.label}`);
+            }
+          } else {
+            Alert.alert('Exploración', `Has llegado a: ${node.label}`);
+          }
         }}
       />
+
+      {/* 🧩 RENDERIZADO DINÁMICO DE MINIJUEGOS 🧩 */}
+      {activePuzzle?.visible && (() => {
+          const onComplete = (success: boolean, score: number) => {
+              if (success) {
+                  handleSimulateTransaction(score, `Puzzle: ${activePuzzle.type}`);
+                  Alert.alert('¡DESAFÍO SUPERADO!', `Has ganado ${score} XP para tu liga.`);
+              }
+              setActivePuzzle(null);
+          };
+          const onClose = () => setActivePuzzle(null);
+
+          switch (activePuzzle.type) {
+              case 'debt_sorter': return <DebtSorterPuzzle visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'transaction_tagger': return <TransactionTagger visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'invoice_scanner': return <InvoiceScanner visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'change_counter': return <ChangeCounter visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'interest_calculator': return <InterestCalculator visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'savings_goal': return <SavingsGoal visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'card_match': return <CardMatchFinance visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'transaction_memory': return <TransactionMemory visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'debt_snowball': return <DebtSnowball visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'portfolio_builder': return <PortfolioBuilder visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'crisis_manager': return <CrisisManager visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'payment_timing': return <PaymentTiming visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'bubble_burst': return <BubbleBurst visible={true} onComplete={onComplete} onClose={onClose} />;
+              case 'combo_chain': return <ComboChain visible={true} onComplete={onComplete} onClose={onClose} />;
+              default: return null;
+          }
+      })()}
+
       <LeagueJoinModal
         visible={joinedLeague !== null}
         leagueName={joinedLeague?.name ?? ''}
@@ -1352,13 +1435,14 @@ export default function LeagueScreen() {
                 <WeatherBanner />
               </View>
               {renderQuickMissions()}
+              {renderBossPreview()}
             </ScrollView>
           </View>
 
-          {/* MAIN PANE */}
+          {/* MAIN PANE: SELECCIÓN DE ISLA + RANKING */}
           <View style={S.mainPane}>
             <ScrollView contentContainerStyle={S.scrollContent} showsVerticalScrollIndicator={false}>
-              {renderProgressMap()}
+              {renderIslandSelection()}
               <View style={{ marginTop: 24 }}>
                 {renderLeagues()}
               </View>
@@ -1370,9 +1454,8 @@ export default function LeagueScreen() {
           {renderHeroBanner()}
           <WeatherBanner />
           {renderQuickMissions()}
+          {renderIslandSelection()}
           {renderBossPreview()}
-          {renderProgressMap()}
-
           {renderLeagues()}
           <View style={{ height: 40 }} />
         </ScrollView>
