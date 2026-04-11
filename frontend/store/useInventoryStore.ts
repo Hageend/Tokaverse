@@ -8,7 +8,7 @@ import { usePlayerStore } from './usePlayerStore';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
-export type ItemType   = 'card' | 'weapon' | 'protection' | 'consumable';
+export type ItemType   = 'card' | 'weapon' | 'protection' | 'consumable' | 'special';
 export type WeaponStyle = 'sword' | 'bow' | 'staff' | 'dagger' | 'card' | 'physical';
 
 export interface ItemStats {
@@ -328,6 +328,8 @@ interface InventoryState {
   hasItem:     (name: string) => boolean;
   getEquippedStats: () => ItemStats;
   consumeItem:     (id: string) => ItemStats | null;
+  getSpinBalance:   () => number;
+  consumeSpinItem:  () => boolean;
 }
 
 export const useInventoryStore = create<InventoryState>((set, get) => ({
@@ -464,5 +466,23 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     const stats = item.stats || null;
     set(s => ({ items: s.items.filter(i => i.id !== id) }));
     return stats;
+  },
+
+  getSpinBalance() {
+    return get().items.filter(i => i.pixelArt === 'item_spin_chance' || i.name.includes('Suerte')).length;
+  },
+
+  consumeSpinItem() {
+    const { items } = get();
+    const item = items.find(i => i.pixelArt === 'item_spin_chance' || i.name.includes('Suerte'));
+    if (!item) return false;
+    set(s => {
+      const idx = s.items.findIndex(i => i.id === item.id);
+      if (idx === -1) return s;
+      const newItems = [...s.items];
+      newItems.splice(idx, 1);
+      return { items: newItems };
+    });
+    return true;
   }
 }));

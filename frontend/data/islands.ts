@@ -50,6 +50,13 @@ export interface Island {
   completedMissions: number;
   nodes: MapNode[];
   npcs: NPCInstance[];
+  battles?: Array<{
+    id: string;
+    x: string | number;
+    y: string | number;
+    factionA: 'red' | 'blue' | 'yellow' | 'purple';
+    factionB: 'red' | 'blue' | 'yellow' | 'purple';
+  }>;
 }
 
 // ─── BASE DE DATOS MAESTRA ───────────────────────────────────────────────────
@@ -75,6 +82,10 @@ export const ISLANDS_DATA: Island[] = [
     npcs: [
       { x: '20%', y: '85%', npc: { faction: 'blue', type: 'warrior' } },
       { x: '80%', y: '20%', npc: { faction: 'red', type: 'archer' } },
+    ],
+    battles: [
+      { id: 'b1', x: '45%', y: '50%', factionA: 'blue', factionB: 'red' },
+      { id: 'b2', x: '10%', y: '40%', factionA: 'blue', factionB: 'red' },
     ]
   },
   {
@@ -96,6 +107,9 @@ export const ISLANDS_DATA: Island[] = [
     ],
     npcs: [
       { x: '30%', y: '70%', npc: { faction: 'purple', type: 'mage' } },
+    ],
+    battles: [
+      { id: 'bn1', x: '50%', y: '30%', factionA: 'purple', factionB: 'yellow' },
     ]
   },
   {
@@ -116,6 +130,10 @@ export const ISLANDS_DATA: Island[] = [
     ],
     npcs: [
       { x: '40%', y: '60%', npc: { faction: 'yellow', type: 'mage' } },
+    ],
+    battles: [
+      { id: 'bi1', x: '30%', y: '40%', factionA: 'yellow', factionB: 'red' },
+      { id: 'bi2', x: '70%', y: '70%', factionA: 'blue', factionB: 'purple' },
     ]
   }
 ];

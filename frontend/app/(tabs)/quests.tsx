@@ -81,16 +81,16 @@ type ClassId = typeof JRPG_CLASSES[number]['id'];
 
 // ─── Hábitos y Dailies ────────────────────────────────────────────────────
 const HABITS = [
-  { id: 'h1', title: 'Compra de Despensa Toka',     icon: '🛒', pixelIcon: 'item_chest', type: 'positive' as const, xp: 20  },
-  { id: 'h2', title: 'Carga Eficiente de Gasolina', icon: '⛽', type: 'positive' as const, xp: 25  },
-  { id: 'h3', title: 'Comprobación a Tiempo',        icon: '📋', type: 'positive' as const, xp: 30  },
-  { id: 'h4', title: 'Gasto Impulsivo Extra',        icon: '🎰', type: 'negative' as const, hpPenalty: 25 },
+  { id: 'h1', title: 'Cacería de Slimes',     icon: '🐛', pixelIcon: 'item_sword', type: 'positive' as const, xp: 20  },
+  { id: 'h2', title: 'Entrenamiento Samurai', icon: '⚔️', type: 'positive' as const, xp: 25  },
+  { id: 'h3', title: 'Estudio de Hechizos',   icon: '📜', type: 'positive' as const, xp: 30  },
+  { id: 'h4', title: 'Trampa de Cofre (Mimic)', icon: '📦', pixelIcon: 'item_chest', type: 'negative' as const, hpPenalty: 25 },
 ];
 
 const DAILIES = [
-  { id: 'd1', title: 'Subir comprobante Connect',  icon: '📸', completed: false, xp: 60,  hpPenalty: 20 },
-  { id: 'd2', title: 'Registrar odómetro diario',  icon: '📊', completed: false, xp: 70,  hpPenalty: 25 },
-  { id: 'd3', title: 'Completar "Quest Mercadito"', icon: '🛒', pixelIcon: 'item_chest', completed: false, xp: 100, hpPenalty: 40 },
+  { id: 'd1', title: 'Derrotar 3 monstruos',    icon: '🐲', completed: false, xp: 60,  hpPenalty: 20 },
+  { id: 'd2', title: 'Forjar nuevo equipo',     icon: '🔨', completed: false, xp: 70,  hpPenalty: 25 },
+  { id: 'd3', title: 'Entrar en Arena PvP',     icon: '🏟️', pixelIcon: 'item_sword', completed: false, xp: 100, hpPenalty: 40 },
 ];
 
 // ─── Jefes disponibles ───────────────────────────────────────────────────
@@ -301,6 +301,13 @@ const S = StyleSheet.create({
   petContainer: { alignItems: 'center', justifyContent: 'center', marginLeft: -5, zIndex: 10 },
   petBuffBadge: { backgroundColor: 'rgba(234,179,8,0.15)', borderWidth: 1, borderColor: '#EAB308', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: -4 },
   petBuffTxt:   { color: '#FDE047', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
+  
+  // PvP styles
+  pvpBtn: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.accent, borderRadius: 12, padding: 14, marginBottom: 20,
+    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5
+  },
+  pvpBtnGlow: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.accent, opacity: 0.1, borderRadius: 12 },
 });
 
 const USER_ID = 'user_123';
@@ -509,8 +516,8 @@ export default function QuestsScreen() {
   };
   
   const handleUseItem = (itemId: string) => {
-    const { useItem } = useInventoryStore.getState();
-    const stats = useItem(itemId);
+    const { consumeItem } = useInventoryStore.getState();
+    const stats = consumeItem(itemId);
     if (!stats) return;
 
     if (stats.hp) {
@@ -793,6 +800,15 @@ export default function QuestsScreen() {
               <Image source={require('../../assets/images/items/item_sword.png')} style={{ width: 20, height: 20, marginRight: 8 }} contentFit="contain" />
               <Text style={[S.combatBtnTitle, { fontSize: 14 }]}>Ver Almanaque</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[S.pvpBtn, { marginTop: 10 }]}
+              onPress={() => Alert.alert('🏟️ Arena PvP', 'Preparando los servidores para el combate... ¡Próximamente!')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="flash" size={18} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={[S.combatBtnTitle, { fontSize: 14 }]}>Arena PvP</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -898,6 +914,19 @@ export default function QuestsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={S.combatBtnTitle}>Almanaque</Text>
                   <Text style={S.combatBtnSub}>Conoce a tus deudas y enemigos</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#FFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={S.pvpBtn}
+                onPress={() => Alert.alert('🏟️ Arena PvP', 'Los guerreros están afilando sus armas... ¡Próximamente!')}
+                activeOpacity={0.8}
+              >
+                <View style={S.pvpBtnGlow} />
+                <Ionicons name="flash" size={24} color="#FFF" style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={S.combatBtnTitle}>Arena PvP</Text>
+                  <Text style={S.combatBtnSub}>Demuestra que eres el mejor estratega</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#FFF" />
               </TouchableOpacity>

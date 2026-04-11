@@ -21,6 +21,8 @@ import Animated, {
 import { Colors } from '../../constants/Colors';
 import { Island, MapNode } from '../../data/islands';
 import { createShadow, createTextShadow } from '../../utils/styleUtils';
+import { usePlayerStore } from '../../store/usePlayerStore';
+import { DecorativeBattle } from './DecorativeBattle';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -42,7 +44,58 @@ const NPC_ASSETS: Record<string, any> = {
   purple: require('../../assets/images/chars/char_magedark.png'),
 };
 
+// ─── COMPONENTE MEMOIZADO PARA NODOS ───
+const MemoNode = React.memo(({ 
+  node, 
+  status, 
+  onPress, 
+  animatedStyle,
+  getCoord 
+}: { 
+  node: MapNode; 
+  status: 'done' | 'active' | 'locked'; 
+  onPress: () => void;
+  animatedStyle: any;
+  getCoord: (v: any, m: number) => number;
+}) => {
+  const isActive = status === 'active';
+  const isLocked = status === 'locked';
+  const isDone   = status === 'done';
+
+  return (
+    <View style={[S.nodeWrapper, { 
+      top: getCoord(node.y, MAP_HEIGHT), 
+      left: getCoord(node.x, MAP_WIDTH) 
+    }]}>
+      <Animated.View style={isActive ? animatedStyle : null}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onPress}
+          disabled={isLocked}
+          style={[
+            S.nodeCircle,
+            isActive && S.nodeActive,
+            isLocked && S.nodeLocked,
+            isDone && S.nodeDone
+          ]}
+        >
+          <Text style={S.nodeIcon}>{node.icon || '📍'}</Text>
+          {isDone && (
+            <View style={S.checkBadge}>
+              <Ionicons name="checkmark" size={12} color="#fff" />
+            </View>
+          )}
+        </TouchableOpacity>
+        <Text style={[S.nodeLabel, isLocked && { opacity: 0.3 }]}>
+          {node.label}
+        </Text>
+      </Animated.View>
+    </View>
+  );
+});
+
 export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Props) => {
+  const islandProgress = usePlayerStore(s => s.islandProgress);
   const bounceValue = useSharedValue(0);
 
   useEffect(() => {
@@ -64,9 +117,17 @@ export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Pro
 
   if (!island) return null;
 
+  // Filtramos y ordenamos nodos
   const pathNodes = [...island.nodes]
     .filter(n => typeof n.pathOrder === 'number')
     .sort((a, b) => (a.pathOrder ?? 0) - (b.pathOrder ?? 0));
+
+  const islandDoneNodes = islandProgress[island.id] || [];
+  
+  // Determinamos el progreso actual
+  const lastPathOrderDone = pathNodes
+    .filter(n => islandDoneNodes.includes(n.id))
+    .reduce((max, n) => Math.max(max, n.pathOrder || 0), 0);
 
   const getCoord = (val: string | number, max: number) => {
     if (typeof val === 'string' && val.endsWith('%')) {
@@ -124,6 +185,8 @@ export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Pro
                     {pathNodes.map((node, i) => {
                       if (i === 0) return null;
                       const prev = pathNodes[i - 1];
+                      const isReached = islandDoneNodes.includes(node.id) || (node.pathOrder || 0) <= lastPathOrderDone + 1;
+                      
                       return (
                         <Line
                           key={`line-${i}`}
@@ -131,16 +194,30 @@ export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Pro
                           y1={getCoord(prev.y, MAP_HEIGHT)}
                           x2={getCoord(node.x, MAP_WIDTH)}
                           y2={getCoord(node.y, MAP_HEIGHT)}
-                          stroke="rgba(255,255,255,0.4)"
+                          stroke={isReached ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.15)"}
                           strokeWidth="2"
-                          strokeDasharray="5,5"
+                          strokeDasharray={isReached ? "0" : "5,5"}
                         />
                       );
                     })}
                   </Svg>
 
-                  {/* NPCs */}
-                  {island.npcs.map((npc, i) => (
+                    {/* Microbatallas decorativas (Tiny Swords fighting) */}
+                    {island.battles?.map((battle) => (
+                      <DecorativeBattle 
+                        key={battle.id}
+                        factionA={battle.factionA}
+                        factionB={battle.factionB}
+                        x={battle.x}
+                        y={battle.y}
+                        getCoord={getCoord}
+                        maxWidth={MAP_WIDTH}
+                        maxHeight={MAP_HEIGHT}
+                      />
+                    ))}
+
+                    {/* NPCs Estáticos */}
+                    {island.npcs.map((npc, i) => (
                     <View 
                       key={`npc-${i}`} 
                       style={[S.npcWrapper, { 
@@ -154,42 +231,25 @@ export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Pro
 
                   {/* Nodos de Progreso */}
                   {island.nodes.map((node) => {
-                    const isActive = node.state === 'active';
-                    const isLocked = node.state === 'locked';
-                    const isDone   = node.state === 'done';
+                    let status: 'done' | 'active' | 'locked' = 'locked';
+                    
+                    if (islandDoneNodes.includes(node.id)) {
+                      status = 'done';
+                    } else if ((node.pathOrder || 0) === lastPathOrderDone + 1 || (!node.pathOrder && islandDoneNodes.length === 0)) {
+                      status = 'active';
+                    } else if (node.type === 'start' && islandDoneNodes.length === 0) {
+                      status = 'active'; // El primer nodo siempre está activo si no hay progreso
+                    }
 
                     return (
-                      <View 
+                      <MemoNode 
                         key={node.id} 
-                        style={[S.nodeWrapper, { 
-                          top: getCoord(node.y, MAP_HEIGHT), 
-                          left: getCoord(node.x, MAP_WIDTH) 
-                        }]}
-                      >
-                        <Animated.View style={isActive ? animatedNodeStyle : null}>
-                          <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => !isLocked && onNodePress(node)}
-                            disabled={isLocked}
-                            style={[
-                              S.nodeCircle,
-                              isActive && S.nodeActive,
-                              isLocked && S.nodeLocked,
-                              isDone && S.nodeDone
-                            ]}
-                          >
-                            <Text style={S.nodeIcon}>{node.icon || '📍'}</Text>
-                            {isDone && (
-                              <View style={S.checkBadge}>
-                                <Ionicons name="checkmark" size={12} color="#fff" />
-                              </View>
-                            )}
-                          </TouchableOpacity>
-                          <Text style={[S.nodeLabel, isLocked && { opacity: 0.3 }]}>
-                            {node.label}
-                          </Text>
-                        </Animated.View>
-                      </View>
+                        node={node} 
+                        status={status} 
+                        onPress={() => onNodePress(node)}
+                        animatedStyle={animatedNodeStyle}
+                        getCoord={getCoord}
+                      />
                     );
                   })}
                 </View>
@@ -204,7 +264,7 @@ export const DetailedIslandMap = ({ island, visible, onClose, onNodePress }: Pro
                 <Text style={S.progressPercent}>{Math.round((island.completedMissions / (island.totalMissions || 1)) * 100)}%</Text>
              </View>
              <View style={S.progressTrack}>
-                <View style={[S.progressFill, { width: `${(island.completedMissions / (island.totalMissions || 1)) * 100}%` as any }]} />
+                <View style={[S.progressFill, { width: `${(islandDoneNodes.length / (island.totalMissions || 1)) * 100}%` as any }]} />
              </View>
           </View>
         </View>

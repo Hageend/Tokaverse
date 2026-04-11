@@ -22,6 +22,7 @@ import {
 import { Colors } from '../../constants/Colors';
 
 import { useWindowDimensions } from 'react-native';
+import { LuckySpinModal } from '../ui/LuckySpinModal';
 
 // SLOT_SIZE and COLS are now dynamically computed inside components
 
@@ -318,9 +319,11 @@ interface InventoryModalProps {
 
 export function InventoryModal({ visible, onClose, onUseItem }: InventoryModalProps) {
   const insets = useSafeAreaInsets();
-  const { items, maxSlots } = useInventoryStore();
+  const { items, maxSlots, getSpinBalance } = useInventoryStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showSpin, setShowSpin] = useState(false);
   const selectedItem = items.find(i => i.id === selectedId) ?? null;
+  const spinBalance = getSpinBalance();
 
   // Slide-up animation
   const translateY = useSharedValue(600);
@@ -411,8 +414,35 @@ export function InventoryModal({ visible, onClose, onUseItem }: InventoryModalPr
             </Text>
           </View>
 
+          {/* Lucky Spin Section */}
+          <View style={styles.spinSection}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <View>
+                <Text style={styles.spinTitle}>Ruleta de la Suerte</Text>
+                <Text style={styles.spinSub}>Usa tus potenciadores para ganar premios</Text>
+              </View>
+              <View style={styles.spinBalanceBadge}>
+                <Text style={styles.spinBalanceTxt}>{spinBalance} Tiradas</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.spinActionBtn, spinBalance === 0 && { opacity: 0.5 }]} 
+              onPress={() => setShowSpin(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="color-filter" size={16} color="#FFF" />
+              <Text style={styles.spinActionBtnTxt}>GIRAR AHORA</Text>
+            </TouchableOpacity>
+          </View>
+
         </ScrollView>
       </Animated.View>
+
+      <LuckySpinModal 
+        visible={showSpin} 
+        onClose={() => setShowSpin(false)} 
+      />
 
       {/* Item Detail Absolute Popup */}
       {selectedItem && (
@@ -477,12 +507,19 @@ const styles = StyleSheet.create({
   },
   spinTitle: { color: '#e8d5ff', fontWeight: '900', fontSize: 13, marginBottom: 4 },
   spinSub:   { color: 'rgba(255,255,255,0.3)', fontSize: 11, lineHeight: 16, marginBottom: 10 },
-  spinComingSoon: {
-    backgroundColor: 'rgba(123,94,167,0.1)', borderRadius: 8,
-    borderWidth: 1, borderColor: '#7b5ea744',
-    paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start',
-  },
   spinComingSoonTxt: { color: '#7b5ea7', fontSize: 11, fontWeight: '800' },
+  spinBalanceBadge: {
+    backgroundColor: 'rgba(123,94,167,0.2)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+    borderWidth: 1, borderColor: '#7b5ea744'
+  },
+  spinBalanceTxt: { color: '#e8d5ff', fontSize: 10, fontWeight: '900' },
+  spinActionBtn: {
+    backgroundColor: '#7b5ea7', flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 12,
+    shadowColor: '#7b5ea7', shadowOpacity: 0.3, shadowRadius: 8,
+  },
+  spinActionBtnTxt: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
 });
 
 export default InventoryModal;
