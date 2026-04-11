@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { PurchaseSuccessAnimation } from './PurchaseSuccessAnimation';
 import { StarCoinShop } from '../ui/StarCoinShop';
+import { CircuitLoader } from '../animations/CircuitLoader';
 
 // ─── Variables de Diseño Códice (HTML port) ─────────────────────────────────
 const C = {
@@ -73,12 +74,14 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
 
     const { 
         starCoins, unlockedClasses, unlockClass, addStarCoins,
-        ownedPets, unlockPet, equippedPet, setEquippedPet
+        ownedPets, unlockPet, equippedPet, setEquippedPet,
+        petMetadata, registerPetTap, hatchPet, evolvePet
     } = usePlayerStore();
     const { addItem } = useInventoryStore();
 
     const [showConfetti, setShowConfetti] = useState(false);
     const [successItem, setSuccessItem] = useState<any>(null);
+    const [evolvingPet, setEvolvingPet] = useState<string | null>(null);
 
     const handleAction = (item: any, type: 'hero' | 'item' | 'card' | 'pet') => {
         if (type === 'hero') {
@@ -97,16 +100,40 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
                 setShowConfetti(true);
             }
         } else if (type === 'pet') {
+            const meta = petMetadata[item.id];
+            
             if (ownedPets.includes(item.id)) {
+                if (!meta?.hatched) {
+                    registerPetTap(item.id);
+                    if (meta?.taps >= 9) {
+                        setEvolvingPet(item.id);
+                        setTimeout(() => {
+                            hatchPet(item.id);
+                            setEvolvingPet(null);
+                        }, 3000);
+                    }
+                    return;
+                }
+                
+                const currentLevel = usePlayerStore.getState().level;
+                if (!meta.evolved && currentLevel >= item.stage2_evolved.levelRequired) {
+                    setEvolvingPet(item.id);
+                    setTimeout(() => {
+                        evolvePet(item.id);
+                        setEvolvingPet(null);
+                    }, 3000);
+                    return;
+                }
+
                 setEquippedPet(item.id);
-                return alert(`${item.name} ahora te acompaña.`);
+                return;
             }
+
             if (starCoins < item.cost) return alert('No tienes suficientes Star Coins.');
-            if (unlockPet(item.id)) {
-                addStarCoins(-item.cost);
-                setSuccessItem({ id: item.id, name: item.name, icon: '🐾', type: 'pet', sprite: item.stage1.sprite });
-                setShowConfetti(true);
-            }
+            unlockPet(item.id);
+            addStarCoins(-item.cost);
+            setSuccessItem({ id: item.id, name: item.name, icon: '🐾', type: 'pet', sprite: item.stage1.sprite });
+            setShowConfetti(true);
         } else {
             if (starCoins < item.price) return alert('No tienes suficientes Star Coins.');
             const ok = addItem({
@@ -190,16 +217,24 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
                                 ) : (
                                     <View style={S.heroGrid}>
                                         {tab === 'heroes' && HEROES.map((h) => 
-                                            <HeroCard key={h.id} item={h} owned={unlockedClasses.includes(h.id)} onPress={() => handleAction(h, 'hero')} />
+                                            <HeroCard key={h.id} item={h} owned={unlockedClasses.includes(h.id)} onPress={() => handleAction(h, 'hero')} isDesktop={isDesktop} />
                                         )}
                                         {tab === 'pets' && RPG_PETS.map((pet) => 
-                                            <PetCard key={pet.id} pet={pet} owned={ownedPets.includes(pet.id)} equipped={equippedPet === pet.id} onPress={() => handleAction(pet, 'pet')} />
+                                            <PetCard 
+                                                key={pet.id} 
+                                                pet={pet} 
+                                                owned={ownedPets.includes(pet.id)} 
+                                                equipped={equippedPet === pet.id} 
+                                                meta={petMetadata[pet.id]}
+                                                onPress={() => handleAction(pet, 'pet')} 
+                                                isDesktop={isDesktop}
+                                            />
                                         )}
                                         {tab === 'items' && ITEMS.map((item) => 
-                                            <ShopCard key={item.name} item={item} onPress={() => handleAction(item, 'item')} />
+                                            <ShopCard key={item.name} item={item} onPress={() => handleAction(item, 'item')} isDesktop={isDesktop} />
                                         )}
                                         {tab === 'cards' && CARDS.map((item) => 
-                                            <ShopCard key={item.name} item={item} onPress={() => handleAction(item, 'card')} />
+                                            <ShopCard key={item.name} item={item} onPress={() => handleAction(item, 'card')} isDesktop={isDesktop} />
                                         )}
                                     </View>
                                 )}
@@ -225,6 +260,15 @@ export const AdventurerCodex = ({ visible, onClose }: { visible: boolean; onClos
                         }} 
                         onClose={() => { setShowConfetti(false); setSuccessItem(null); }} 
                     />
+                )}
+
+                {evolvingPet && (
+                    <View style={S.evolvingOverlay}>
+                        <CircuitLoader 
+                            spriteUrl={RPG_PETS.find(p => p.id === evolvingPet)?.stage2_evolved.sprite}
+                            evolutionText={petMetadata[evolvingPet]?.hatched ? "EVOLUCIONANDO..." : "ECLOSIONANDO..."}
+                        />
+                    </View>
                 )}
             </View>
         </Modal>
@@ -265,29 +309,68 @@ const HeroCard = ({ item, owned, onPress }: any) => {
     );
 };
 
-const PetCard = ({ pet, owned, equipped, onPress }: any) => (
-    <View style={[S.heroCard, equipped && { borderColor: C.accentGreen }]}>
-        {equipped && <Text style={S.ownedStar}>★</Text>}
-        <View style={S.spriteFrame}>
-            <Image source={pet.stage1.sprite} style={S.pixelSprite} contentFit="contain" />
-        </View>
-        <Text style={S.heroName} numberOfLines={1}>{pet.name}</Text>
-        <Text style={S.heroClass} numberOfLines={2}>{pet.lore}</Text>
-        {owned ? (
-            <TouchableOpacity style={[S.buyBtn, equipped && { backgroundColor: '#2a4a2a' }]} onPress={onPress}>
-                <Text style={[S.buyBtnTxt, equipped && { color: C.inkBright }]}>{equipped ? 'EQUIPADO' : 'EQUIPAR'}</Text>
-            </TouchableOpacity>
-        ) : (
-            <TouchableOpacity style={S.buyBtn} onPress={onPress}>
-                <Text style={S.buyBtnStar}>★</Text>
-                <Text style={S.buyBtnTxt}>{pet.cost}</Text>
-            </TouchableOpacity>
-        )}
-    </View>
-);
+const PetCard = ({ pet, owned, equipped, meta, onPress, isDesktop }: any) => {
+    const scale = useSharedValue(1);
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }]
+    }));
 
-const ShopCard = ({ item, onPress }: any) => (
-    <View style={S.heroCard}>
+    const handleTap = () => {
+        if (owned && !meta?.hatched) {
+            scale.value = withSequence(withTiming(1.2, { duration: 100 }), withTiming(1, { duration: 100 }));
+        }
+        onPress();
+    };
+
+    let sprite = pet.stage1.sprite;
+    let label = pet.name;
+    let subLabel = pet.lore;
+    let btnText = equipped ? 'EQUIPADO' : 'EQUIPAR';
+
+    if (owned && meta) {
+        if (!meta.hatched) {
+            sprite = require('../../assets/images/items/item_chest.png'); // Placeholder Egg
+            label = "HUEVO DESCONOCIDO";
+            subLabel = `Toca para incubar (${meta.taps}/10)`;
+            btnText = "INCUBAR";
+        } else if (meta.evolved) {
+            sprite = pet.stage2_evolved.sprite;
+        }
+    }
+
+    return (
+        <Animated.View style={[S.heroCard, isDesktop && { width: '31%' }, equipped && { borderColor: C.accentGreen }, animatedStyle]}>
+            {equipped && <Text style={S.ownedStar}>★</Text>}
+            <TouchableOpacity activeOpacity={0.9} onPress={handleTap} style={{ flex: 1 }}>
+                <View style={S.spriteFrame}>
+                    <Image source={sprite} style={S.pixelSprite} contentFit="contain" />
+                </View>
+                <Text style={S.heroName} numberOfLines={1}>{label}</Text>
+                <Text style={S.heroClass} numberOfLines={2}>{subLabel}</Text>
+                
+                {owned ? (
+                    <View style={[S.buyBtn, equipped && { backgroundColor: '#2a4a2a' }]}>
+                        <Text style={[S.buyBtnTxt, equipped && { color: C.inkBright }]}>{btnText}</Text>
+                    </View>
+                ) : (
+                    <View style={S.buyBtn}>
+                        <Text style={S.buyBtnStar}>★</Text>
+                        <Text style={S.buyBtnTxt}>{pet.cost}</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+
+            {owned && meta?.hatched && !meta.evolved && usePlayerStore.getState().level >= pet.stage2_evolved.levelRequired && (
+                <TouchableOpacity style={S.evolveBadge} onPress={onPress}>
+                  <Text style={S.evolveBadgeTxt}>EVOLUCIONAR</Text>
+                </TouchableOpacity>
+            )}
+        </Animated.View>
+    );
+};
+
+const ShopCard = ({ item, onPress, isDesktop }: any) => (
+    <View style={[S.heroCard, isDesktop && { width: '31%' }]}>
         <View style={[S.spriteFrame, { borderColor: `${item.color}66` }]}>
             {item.sprite ? (
                 <Image source={item.sprite} style={S.pixelSprite} contentFit="contain" />
@@ -573,6 +656,31 @@ const S = StyleSheet.create({
     closeBarSign: {
         fontSize: 12,
         color: C.borderBright,
+        fontFamily: fontFam,
+    },
+    evolvingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.9)',
+        zIndex: 10000,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    evolveBadge: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: C.accentRed,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: C.inkBright,
+        zIndex: 10,
+    },
+    evolveBadgeTxt: {
+        color: '#FFF',
+        fontSize: 8,
+        fontWeight: '900',
         fontFamily: fontFam,
     }
 });

@@ -5,6 +5,13 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+export interface PetMetadata {
+  hatched: boolean;
+  taps:    number;
+  evolved: boolean;
+  level:   number;
+}
+
 interface PlayerState {
   level:       number;
   xp:          number;
@@ -16,6 +23,8 @@ interface PlayerState {
   unlockedClasses: string[];   // Clases desbloqueadas
   equippedPet: string | null;  // ID de la mascota actual
   ownedPets:   string[];       // IDs de las mascotas desbloqueadas
+  petMetadata: Record<string, PetMetadata>; // Progreso individual de mascotas
+  islandProgress: Record<string, number[]>; // islandId -> IDs de nodos completados
   unlockedRecipes: string[];   // IDs de recetas de fusión ocultas
   
   // Acciones
@@ -23,8 +32,12 @@ interface PlayerState {
   addStarCoins:(amount: number) => void;
   unlockClass: (cls: string) => boolean;
   setCharClass: (cls: any) => void;
-  unlockPet:   (petId: string) => boolean;
+  unlockPet:   (petId: string) => void;
+  registerPetTap: (petId: string) => void;
+  hatchPet:    (petId: string) => void;
+  evolvePet:   (petId: string) => void;
   setEquippedPet: (petId: string | null) => void;
+  completeNode: (islandId: string, nodeId: number) => void;
   unlockRecipe: (recipeId: string) => boolean;
   resetPlayer:  () => void;
 }
@@ -40,11 +53,13 @@ export const usePlayerStore = create<PlayerState>()(
       nextLevelXp: XP_BASE,
       baseMaxHp:   100,
       baseMaxMana: 60,
-      charClass:   'warrior', // Default
-      starCoins:   100,       // Tweak a economía rebalanceada (100 base)
-      unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief'], // 3 M / 3 F default
+      charClass:   'warrior',
+      starCoins:   100,
+      unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief'],
       equippedPet: null,
       ownedPets:   [],
+      petMetadata: {},
+      islandProgress: {},
       unlockedRecipes: [],
 
       addXp: (amount: number) => {
@@ -62,10 +77,8 @@ export const usePlayerStore = create<PlayerState>()(
           newXp -= newNext;
           newLevel++;
           leveled = true;
-          // Escalado: +20 HP, +10 Mana por nivel
           newHp   += 20;
           newMana += 10;
-          // El XP para el siguiente nivel aumenta un 15% (curva de dificultad)
           newNext = Math.floor(XP_BASE * Math.pow(1.15, newLevel - 1));
         }
 
@@ -92,13 +105,71 @@ export const usePlayerStore = create<PlayerState>()(
       setCharClass: (cls) => set({ charClass: cls }),
 
       unlockPet: (petId) => {
-        const { ownedPets } = get();
-        if (ownedPets.includes(petId)) return false;
-        set(s => ({ ownedPets: [...s.ownedPets, petId] }));
-        return true;
+        const { ownedPets, petMetadata } = get();
+        if (ownedPets.includes(petId)) return;
+        
+        set(s => ({ 
+          ownedPets: [...s.ownedPets, petId],
+          petMetadata: {
+            ...s.petMetadata,
+            [petId]: { hatched: false, taps: 0, evolved: false, level: 1 }
+          }
+        }));
+      },
+
+      registerPetTap: (petId) => {
+        const { petMetadata } = get();
+        const meta = petMetadata[petId];
+        if (!meta || meta.hatched) return;
+
+        set(s => ({
+          petMetadata: {
+            ...s.petMetadata,
+            [petId]: { ...meta, taps: meta.taps + 1 }
+          }
+        }));
+      },
+
+      hatchPet: (petId) => {
+        const { petMetadata } = get();
+        const meta = petMetadata[petId];
+        if (!meta) return;
+
+        set(s => ({
+          petMetadata: {
+            ...s.petMetadata,
+            [petId]: { ...meta, hatched: true, taps: 10 }
+          }
+        }));
+      },
+
+      evolvePet: (petId) => {
+        const { petMetadata } = get();
+        const meta = petMetadata[petId];
+        if (!meta || !meta.hatched) return;
+
+        set(s => ({
+          petMetadata: {
+            ...s.petMetadata,
+            [petId]: { ...meta, evolved: true }
+          }
+        }));
       },
 
       setEquippedPet: (petId) => set({ equippedPet: petId }),
+
+      completeNode: (islandId, nodeId) => {
+        const { islandProgress } = get();
+        const islandNodes = islandProgress[islandId] || [];
+        if (islandNodes.includes(nodeId)) return;
+
+        set(s => ({
+          islandProgress: {
+            ...s.islandProgress,
+            [islandId]: [...islandNodes, nodeId]
+          }
+        }));
+      },
 
       unlockRecipe: (recipeId) => {
         const { unlockedRecipes } = get();
@@ -110,7 +181,7 @@ export const usePlayerStore = create<PlayerState>()(
       resetPlayer: () => set({
         level: 1, xp: 0, nextLevelXp: XP_BASE, baseMaxHp: 100, baseMaxMana: 60, charClass: 'warrior',
         starCoins: 100, unlockedClasses: ['warrior', 'archer', 'knight', 'mage', 'kitsune', 'thief'],
-        equippedPet: null, ownedPets: [], unlockedRecipes: []
+        equippedPet: null, ownedPets: [], petMetadata: {}, islandProgress: {}, unlockedRecipes: []
       }),
     }),
     {
